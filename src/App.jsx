@@ -11,7 +11,7 @@ const classInfo = {
   'Toái Mộng': { color: '#87CEEB', emoji: '🗡️' },
   'Thiết Y': { color: '#FFA500', emoji: '🛡️' },
   'Huyết Hà': { color: '#8B0000', emoji: '🚩' }, // Màu đỏ đô
-  'Thần Tướng': { color: '#4169E1', emoji: '⚔️' },
+  'Thần Tương': { color: '#4169E1', emoji: '⚔️' },
   'Tố Vấn': { color: '#FF69B4', emoji: '🌸' },
   'Cửu Linh': { color: '#800080', emoji: '🔮' },
 };
@@ -36,7 +36,7 @@ function App() {
 
   const handleAdminLogin = () => {
     const pass = prompt("Nhập mật mã Admin để điều chỉnh:");
-    if (pass === "123456") { 
+    if (pass === "quymonquan2026") { 
       setIsAdmin(true);
       alert("Đã đăng nhập quyền Admin! Bạn có thể xóa bất kỳ ai.");
     } else {
@@ -100,7 +100,7 @@ function App() {
         </button>
         
         <img src="/nth-logo.png" alt="Logo" style={{ width: '80px', marginBottom: '10px' }} />
-        <h1 style={{ color: '#d4af37', margin: '0', fontSize: '28px', textShadow: '2px 2px 4px black' }}>ĐĂNG KÝ BANG CHIẾN</h1>
+        <h1 style={{ color: '#d4af37', margin: '0', fontSize: '28px', textShadow: '2px 2px 4px black' }}>BANG QUỶ MÔN QUAN - ĐĂNG KÝ BANG CHIẾN</h1>
         <p style={{ color: '#888', marginBottom: '20px' }}>{new Date().toLocaleDateString('vi-VN')}</p>
 
         {/* BẢNG TỔNG HỢP QUÂN SỐ */}
