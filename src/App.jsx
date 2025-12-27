@@ -9,7 +9,7 @@ const supabase = createClient(
 const classInfo = {
   'Toái Mộng': { color: '#87CEEB' },
   'Thiết Y': { color: '#FFA500' },
-  'Huyết Hà': { color: '#8B0000' }, // Đỏ đô
+  'Huyết Hà': { color: '#8B0000' },
   'Thần Tướng': { color: '#4169E1' },
   'Tố Vấn': { color: '#FF69B4' },
   'Cửu Linh': { color: '#800080' },
@@ -37,7 +37,7 @@ function App() {
     const pass = prompt("Nhập mật mã Admin:");
     if (pass === "123456") { 
       setIsAdmin(true);
-      alert("Đã đăng nhập QUYỀN ADMIN!");
+      alert("Đã kích hoạt QUYỀN ADMIN!");
     } else {
       alert("Sai mật mã!");
     }
@@ -65,8 +65,6 @@ function App() {
     const occupant = members.find(m => m.type === type && m.team_slot === slotNum);
     const isSelected = form.type === type && form.team_slot === slotNum;
     const myName = localStorage.getItem('my_char_name');
-    
-    // CHỈ HIỆN NÚT XÓA NẾU LÀ ADMIN HOẶC LÀ Ô CỦA CHÍNH MÌNH
     const canDelete = isAdmin || (occupant && occupant.char_name === myName);
 
     return (
@@ -74,17 +72,17 @@ function App() {
         key={`${type}-${slotNum}`}
         onClick={() => setForm({ ...form, type: type, team_slot: slotNum })}
         style={{
-          width: '80px', height: '45px', margin: '4px', borderRadius: '4px',
-          backgroundColor: occupant ? classInfo[occupant.class_name]?.color : 'rgba(255,255,255,0.05)',
+          height: '40px', margin: '3px 0', borderRadius: '4px',
+          backgroundColor: occupant ? classInfo[occupant.class_name]?.color : '#1a1a1a',
           border: isSelected ? '2px solid gold' : '1px solid #333',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          cursor: 'pointer', fontSize: '11px', color: occupant ? 'white' : '#555', 
-          fontWeight: 'bold', position: 'relative', transition: '0.2s'
+          cursor: 'pointer', fontSize: '11px', color: occupant ? 'white' : '#444', 
+          fontWeight: 'bold', position: 'relative'
         }}
       >
         {occupant ? (
           <>
-            <span style={{ padding: '0 2px', textAlign: 'center' }}>{occupant.char_name}</span>
+            <span style={{ padding: '0 4px', textAlign: 'center', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{occupant.char_name}</span>
             {canDelete && (
               <button 
                 onClick={(e) => { e.stopPropagation(); deleteMember(occupant.id, occupant.char_name); }}
@@ -92,60 +90,70 @@ function App() {
               >×</button>
             )}
           </>
-        ) : `Slot ${slotNum}`}
+        ) : `S${slotNum}`}
       </div>
     );
   };
 
   return (
-    <div style={{ backgroundColor: '#0a0a0a', color: 'white', minHeight: '100vh', padding: '20px', textAlign: 'center', fontFamily: 'Arial' }}>
+    <div style={{ backgroundColor: '#000', color: 'white', minHeight: '100vh', padding: '20px', textAlign: 'center', fontFamily: 'Arial' }}>
       
-      {/* NÚT ADMIN TÀNG HÌNH GÓC PHẢI */}
-      <button onClick={handleAdminLogin} style={{ position: 'absolute', top: '10px', right: '10px', background: 'transparent', border: '1px solid #222', color: '#333', fontSize: '10px', cursor: 'pointer' }}>
-        {isAdmin ? "ADMIN" : "LOG"}
-      </button>
+      <button onClick={handleAdminLogin} style={{ position: 'absolute', top: '10px', right: '10px', background: 'transparent', border: 'none', color: '#222', fontSize: '10px', cursor: 'pointer' }}>ADMIN</button>
 
-      {/* LOGO LUÔN CỐ ĐỊNH Ở ĐÂY */}
-      <div style={{ marginBottom: '20px' }}>
-        <img src="/nth-logo.png" alt="Logo" style={{ width: '120px', display: 'block', margin: '0 auto' }} />
-        <h1 style={{ color: 'gold', fontSize: '28px', margin: '10px 0' }}>BANG QUỶ MÔN QUAN - ĐĂNG KÝ BANG CHIẾN</h1>
-      </div>
+      {/* LOGO */}
+      <img src="/nth-logo.png" alt="Logo" style={{ width: '100px', marginBottom: '10px' }} />
+      <h1 style={{ color: 'gold', margin: '0 0 20px 0', fontSize: '24px' }}>BANG QUỶ MÔN QUAN - ĐĂNG KÝ BANG CHIẾN</h1>
 
       {/* TỔNG HỢP QUÂN SỐ */}
-      <div style={{ display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: '15px', background: '#111', padding: '15px', borderRadius: '10px', border: '1px solid #222', marginBottom: '20px', maxWidth: '900px', margin: '0 auto 30px auto' }}>
+      <div style={{ display: 'flex', justifyContent: 'center', gap: '10px', background: '#111', padding: '12px', borderRadius: '8px', border: '1px solid #222', marginBottom: '20px', maxWidth: '1200px', margin: '0 auto 20px auto', flexWrap: 'wrap' }}>
         {Object.keys(classInfo).map(cls => (
-          <div key={cls} style={{ textAlign: 'center', minWidth: '70px' }}>
+          <div key={cls} style={{ borderRight: '1px solid #222', paddingRight: '10px', minWidth: '80px' }}>
             <div style={{ color: classInfo[cls].color, fontSize: '12px', fontWeight: 'bold' }}>{cls}</div>
             <div style={{ fontSize: '18px' }}>{members.filter(m => m.class_name === cls).length}</div>
           </div>
         ))}
-        <div style={{ borderLeft: '1px solid #333', paddingLeft: '15px', color: 'gold' }}>
+        <div style={{ paddingLeft: '10px', color: 'gold' }}>
           <div style={{ fontSize: '12px', fontWeight: 'bold' }}>TỔNG</div>
           <div style={{ fontSize: '18px' }}>{members.length}/90</div>
         </div>
       </div>
 
-      {/* FORM ĐĂNG KÝ GIAO DIỆN CŨ */}
-      <div style={{ background: '#161616', padding: '20px', borderRadius: '10px', display: 'inline-block', border: '1px solid #333', marginBottom: '40px' }}>
-        <input style={{ padding: '10px', background: '#222', color: 'white', border: '1px solid #444', marginRight: '10px', borderRadius: '4px', width: '200px' }} placeholder="Nhập tên nhân vật..." value={form.char_name} onChange={e => setForm({...form, char_name: e.target.value})} required />
-        <select style={{ padding: '10px', background: '#222', color: 'white', border: '1px solid #444', marginRight: '10px', borderRadius: '4px' }} value={form.class_name} onChange={e => setForm({...form, class_name: e.target.value})}>
+      {/* FORM ĐĂNG KÝ */}
+      <div style={{ marginBottom: '30px' }}>
+        <input style={{ padding: '10px', background: '#111', color: 'white', border: '1px solid #333', marginRight: '5px', borderRadius: '4px' }} placeholder="Nhập tên..." value={form.char_name} onChange={e => setForm({...form, char_name: e.target.value})} required />
+        <select style={{ padding: '10px', background: '#111', color: 'white', border: '1px solid #333', marginRight: '5px', borderRadius: '4px' }} value={form.class_name} onChange={e => setForm({...form, class_name: e.target.value})}>
           {Object.keys(classInfo).map(c => <option key={c} value={c}>{c}</option>)}
         </select>
-        <button type="submit" onClick={handleSubmit} style={{ padding: '10px 25px', background: 'gold', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' }}>
+        <button type="submit" onClick={handleSubmit} style={{ padding: '10px 20px', background: 'gold', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' }}>
           ĐĂNG KÝ {form.team_slot ? `(Ô ${form.team_slot})` : ''}
         </button>
       </div>
 
-      {/* BẢNG THÀNH VIÊN - QUAY LẠI GIAO DIỆN Ô VUÔNG ĐẸP */}
-      <h2 style={{ color: 'gold', fontSize: '20px', marginBottom: '20px' }}>CHÍNH THỨC (60)</h2>
-      <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', maxWidth: '1000px', margin: '0 auto 40px auto' }}>
-        {[...Array(60)].map((_, i) => renderSlotCell('Chính thức', i + 1))}
+      {/* 60 CHÍNH THỨC */}
+      <h2 style={{ color: 'gold', fontSize: '18px', marginBottom: '15px' }}>ĐỘI HÌNH CHÍNH THỨC (60)</h2>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(10, 1fr)', gap: '8px', maxWidth: '1200px', margin: '0 auto 40px auto' }}>
+        {[...Array(10)].map((col, colIdx) => (
+          <div key={colIdx} style={{ background: '#0a0a0a', padding: '5px', borderRadius: '4px', border: '1px solid #222' }}>
+            <div style={{ color: 'gold', fontSize: '10px', marginBottom: '5px', fontWeight: 'bold' }}>TEAM {colIdx + 1}</div>
+            {[...Array(6)].map((row, rowIdx) => renderSlotCell('Chính thức', colIdx * 6 + rowIdx + 1))}
+          </div>
+        ))}
       </div>
 
-      <h2 style={{ color: '#87CEEB', fontSize: '20px', marginBottom: '20px' }}>DỰ BỊ / HỌC VIỆC (30)</h2>
-      <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', maxWidth: '1000px', margin: '0 auto' }}>
+      {/* 30 DỰ BỊ */}
+      <h2 style={{ color: '#87CEEB', fontSize: '18px', marginBottom: '15px' }}>DỰ BỊ / HỌC VIỆC (30)</h2>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(10, 1fr)', gap: '8px', maxWidth: '1200px', margin: '0 auto 30px auto' }}>
         {[...Array(30)].map((_, i) => renderSlotCell('Học việc', i + 1))}
       </div>
+
+      {/* GHI CHÚ DƯỚI CÙNG */}
+      <footer style={{ marginTop: '50px', padding: '20px', borderTop: '1px solid #222', maxWidth: '800px', margin: '50px auto 0 auto' }}>
+        <p style={{ fontSize: '12px', color: '#666', lineHeight: '1.6', fontStyle: 'italic' }}>
+          <strong style={{ color: '#888' }}>Lưu ý:</strong> Nếu thành viên xóa lịch sử trình duyệt hoặc đổi máy khác thì họ sẽ không tự xóa được nữa (lúc này cần nhờ các Đương gia (Admin) xóa hộ).
+          <br />
+          Mọi vấn đề về app xin liên hệ <span style={{ color: 'gold' }}>VôẢnhNhân (Zalo: Khoa)</span>
+        </p>
+      </footer>
 
     </div>
   );
