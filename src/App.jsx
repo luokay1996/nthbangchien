@@ -54,7 +54,6 @@ function App() {
     if (error) {
       alert("Lỗi: " + error.message);
     } else {
-      // LƯU TÊN VÀO MÁY NGƯỜI DÙNG ĐỂ TỰ XÓA SAU NÀY
       localStorage.setItem('my_char_name', form.char_name);
       setForm({ ...form, char_name: '', team_slot: null });
     }
@@ -63,7 +62,6 @@ function App() {
   const deleteMember = async (id, name) => {
     const savedName = localStorage.getItem('my_char_name');
 
-    // Điều kiện xóa: Là Admin HOẶC Tên trong ô trùng với tên đã lưu trên máy này
     if (isAdmin || name === savedName) {
       if (window.confirm(`Xác nhận xóa nhân vật [${name}]?`)) {
         const { error } = await supabase.from('register_list').delete().eq('id', id);
@@ -88,19 +86,19 @@ function App() {
           backgroundColor: occupant ? classInfo[occupant.class_name]?.color : '#222',
           border: isSelected ? '2px solid gold' : isMine ? '2px solid #fff' : '1px solid #333',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          cursor: 'pointer', fontSize: '12px', color: occupant ? 'white' : '#555', 
+          cursor: 'pointer', fontSize: '11px', color: occupant ? 'white' : '#555', 
           fontWeight: 'bold', position: 'relative'
         }}
       >
         {occupant ? (
           <>
-            <span style={{ padding: '0 5px' }}>{occupant.char_name}</span>
+            <span style={{ padding: '0 5px', textAlign: 'center' }}>{occupant.char_name}</span>
             <button 
               onClick={(e) => { e.stopPropagation(); deleteMember(occupant.id, occupant.char_name); }}
               style={{ position: 'absolute', top: 0, right: 0, background: 'rgba(0,0,0,0.6)', color: 'white', border: 'none', fontSize: '10px', width: '18px', height: '18px', cursor: 'pointer' }}
             >×</button>
           </>
-        ) : slotNum}
+        ) : `S${slotNum}`}
       </div>
     );
   };
@@ -115,29 +113,43 @@ function App() {
         <h1 style={{ color: 'gold' }}>ĐĂNG KÝ BANG CHIẾN</h1>
 
         {/* BẢNG TỔNG HỢP */}
-        <div style={{ display: 'flex', justifyContent: 'center', gap: '15px', background: '#111', padding: '15px', borderRadius: '8px', marginBottom: '30px' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '15px', background: '#111', padding: '15px', borderRadius: '8px', marginBottom: '30px' }}>
           {Object.keys(classInfo).map(cls => (
-            <div key={cls}>
-              <div style={{ color: classInfo[cls].color, fontWeight: 'bold' }}>{cls}</div>
+            <div key={cls} style={{ minWidth: '80px' }}>
+              <div style={{ color: classInfo[cls].color, fontWeight: 'bold', fontSize: '13px' }}>{cls}</div>
               <div style={{ fontSize: '20px' }}>{members.filter(m => m.class_name === cls).length}</div>
             </div>
           ))}
           <div style={{ borderLeft: '1px solid #444', paddingLeft: '15px', color: 'gold' }}>
-            <div>TỔNG</div>
+            <div style={{ fontSize: '13px', fontWeight: 'bold' }}>TỔNG</div>
             <div style={{ fontSize: '20px' }}>{members.length} / 90</div>
           </div>
         </div>
 
+        {/* FORM ĐĂNG KÝ */}
         <form onSubmit={handleSubmit} style={{ marginBottom: '40px' }}>
-          <input style={{ padding: '12px', background: '#111', color: 'white', marginRight: '10px' }} placeholder="Tên nhân vật..." value={form.char_name} onChange={e => setForm({...form, char_name: e.target.value})} required />
-          <select style={{ padding: '12px', background: '#111', color: 'white', marginRight: '10px' }} value={form.class_name} onChange={e => setForm({...form, class_name: e.target.value})}>
+          <input 
+            style={{ padding: '12px', background: '#111', color: 'white', border: '1px solid #444', marginRight: '10px', borderRadius: '4px' }} 
+            placeholder="Tên nhân vật..." 
+            value={form.char_name} 
+            onChange={e => setForm({...form, char_name: e.target.value})} 
+            required 
+          />
+          <select 
+            style={{ padding: '12px', background: '#111', color: 'white', border: '1px solid #444', marginRight: '10px', borderRadius: '4px' }} 
+            value={form.class_name} 
+            onChange={e => setForm({...form, class_name: e.target.value})}
+          >
             {Object.keys(classInfo).map(c => <option key={c} value={c}>{c}</option>)}
           </select>
-          <button type="submit" style={{ padding: '12px 30px', background: 'gold', fontWeight: 'bold', cursor: 'pointer' }}>ĐĂNG KÝ Ô {form.team_slot || '...'}</button>
+          <button type="submit" style={{ padding: '12px 30px', background: 'gold', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' }}>
+            XÁC NHẬN Ô {form.team_slot ? (form.type === 'Học việc' ? 'Dự bị ' + form.team_slot : form.team_slot) : '...'}
+          </button>
         </form>
 
-        <h2>ĐỘI HÌNH CHÍNH THỨC</h2>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: '15px' }}>
+        {/* 60 CHÍNH THỨC */}
+        <h2 style={{ color: 'gold', borderBottom: '2px solid gold', paddingBottom: '5px', marginBottom: '20px' }}>ĐỘI HÌNH CHÍNH THỨC (60)</h2>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: '15px', marginBottom: '50px' }}>
           {[...Array(10)].map((_, colIdx) => (
             <div key={colIdx} style={{ background: '#0a0a0a', padding: '10px', borderRadius: '6px', border: '1px solid #222' }}>
               <div style={{ color: 'gold', fontSize: '12px', fontWeight: 'bold', marginBottom: '10px' }}>ĐỘI {colIdx + 1}</div>
@@ -145,6 +157,15 @@ function App() {
             </div>
           ))}
         </div>
+
+        {/* 30 DỰ BỊ - HỌC VIỆC */}
+        <h2 style={{ color: '#87CEEB', borderBottom: '2px solid #87CEEB', paddingBottom: '5px', marginBottom: '20px' }}>DỰ BỊ / HỌC VIỆC (30)</h2>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: '10px' }}>
+          {[...Array(30)].map((_, i) => (
+            <div key={i}>{renderSlotCell('Học việc', i + 1)}</div>
+          ))}
+        </div>
+
       </div>
     </div>
   );
