@@ -34,6 +34,11 @@ function App() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.team_slot) return alert("Vui lòng click chọn 1 ô Slot bên dưới trước!");
+    
+    // Kiểm tra xem ô này đã có người chưa
+    const isOccupied = members.some(m => m.type === form.type && m.team_slot === form.team_slot);
+    if (isOccupied) return alert("Ô này đã có người đăng ký rồi!");
+
     const { error } = await supabase.from('register_list').insert([form]);
     if (error) alert("Lỗi: " + error.message);
     else setForm({ ...form, char_name: '', team_slot: null });
@@ -50,22 +55,24 @@ function App() {
           key={`${type}-${i}`}
           onClick={() => setForm({ ...form, type: type, team_slot: i })}
           style={{
-            width: '110px', height: '45px', margin: '4px', borderRadius: '4px',
+            width: '100px', height: '45px', margin: '4px', borderRadius: '4px',
             backgroundColor: occupant ? classInfo[occupant.class_name]?.color : '#2a2a2a',
             border: isSelected ? '2px solid gold' : '1px solid #444',
             display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-            cursor: 'pointer', fontSize: '12px', color: occupant ? 'white' : '#666', fontWeight: 'bold',
+            cursor: 'pointer', fontSize: '11px', color: occupant ? 'white' : '#666', fontWeight: 'bold',
             overflow: 'hidden', position: 'relative'
           }}
         >
           {occupant ? (
             <>
-              <span>{occupant.char_name}</span>
-              <span style={{fontSize: '9px', opacity: 0.8}}>{occupant.class_name}</span>
+              <span style={{whiteSpace: 'nowrap'}}>{occupant.char_name}</span>
               <button 
-                onClick={(e) => { e.stopPropagation(); supabase.from('register_list').delete().eq('id', occupant.id); }}
-                style={{ position: 'absolute', top: 0, right: 0, background: 'red', color: 'white', border: 'none', fontSize: '8px', cursor: 'pointer' }}
-              >X</button>
+                onClick={(e) => { 
+                    e.stopPropagation(); 
+                    if(window.confirm("Xóa đăng ký này?")) supabase.from('register_list').delete().eq('id', occupant.id); 
+                }}
+                style={{ position: 'absolute', top: 0, right: 0, background: 'rgba(255,0,0,0.7)', color: 'white', border: 'none', fontSize: '9px', cursor: 'pointer', padding: '0 3px' }}
+              >x</button>
             </>
           ) : `Slot ${i}`}
         </div>
@@ -75,37 +82,37 @@ function App() {
   };
 
   return (
-    <div style={{ backgroundColor: '#121212', color: 'white', minHeight: '100vh', padding: '20px', textAlign: 'center', fontFamily: 'sans-serif' }}>
-      <img src="/nth-logo.png" alt="Logo" style={{ width: '120px', marginBottom: '10px' }} />
-      <h1 style={{ color: 'gold', margin: '0' }}>ĐĂNG KÝ BANG CHIẾN</h1>
-      <p style={{ color: '#aaa' }}>{new Date().toLocaleDateString('vi-VN')}</p>
+    <div style={{ backgroundColor: '#121212', color: 'white', minHeight: '100vh', padding: '20px', textAlign: 'center', fontFamily: 'Arial, sans-serif' }}>
+      <img src="/nth-logo.png" alt="Logo" style={{ width: '100px', marginBottom: '10px' }} />
+      <h1 style={{ color: 'gold', margin: '0', fontSize: '24px' }}>ĐĂNG KÝ BANG CHIẾN</h1>
+      <p style={{ color: '#aaa', fontSize: '14px' }}>Ngày: {new Date().toLocaleDateString('vi-VN')}</p>
 
-      <form onSubmit={handleSubmit} style={{ margin: '20px auto', maxWidth: '500px', background: '#222', padding: '20px', borderRadius: '8px' }}>
+      <form onSubmit={handleSubmit} style={{ margin: '20px auto', maxWidth: '400px', background: '#222', padding: '20px', borderRadius: '8px', border: '1px solid #333' }}>
         <input 
-          style={{ padding: '10px', width: '70%', marginBottom: '10px' }}
-          placeholder="Tên nhân vật..." 
+          style={{ padding: '10px', width: '90%', marginBottom: '10px', borderRadius: '4px', border: '1px solid #444', background: '#333', color: 'white' }}
+          placeholder="Nhập tên nhân vật..." 
           value={form.char_name} 
           onChange={e => setForm({...form, char_name: e.target.value})} 
           required 
         />
         <select 
-          style={{ padding: '10px', width: '75%', marginBottom: '10px' }}
+          style={{ padding: '10px', width: '95%', marginBottom: '10px', borderRadius: '4px', border: '1px solid #444', background: '#333', color: 'white' }}
           value={form.class_name} 
           onChange={e => setForm({...form, class_name: e.target.value})}
         >
           {Object.keys(classInfo).map(c => <option key={c} value={c}>{c}</option>)}
         </select>
-        <p style={{ color: 'gold' }}>Đang chọn: {form.type} - Ô số {form.team_slot || '?'}</p>
-        <button type="submit" style={{ padding: '10px 30px', background: 'gold', border: 'none', fontWeight: 'bold', cursor: 'pointer' }}>ĐĂNG KÝ</button>
+        <p style={{ color: 'gold', fontSize: '13px' }}>Đang chọn: <span style={{color: form.type === 'Học việc' ? '#87CEEB' : 'gold'}}>{form.type}</span> - Ô số {form.team_slot || '?'}</p>
+        <button type="submit" style={{ padding: '10px 40px', background: 'gold', border: 'none', fontWeight: 'bold', cursor: 'pointer', borderRadius: '4px', color: '#000' }}>ĐĂNG KÝ</button>
       </form>
 
       <div style={{ marginTop: '30px' }}>
-        <h2 style={{ color: 'gold' }}>CHÍNH THỨC (60)</h2>
+        <h2 style={{ color: 'gold', borderBottom: '1px solid #333', paddingBottom: '10px' }}>CHÍNH THỨC ({members.filter(m => m.type === 'Chính thức').length}/60)</h2>
         {renderSlots('Chính thức', 60)}
       </div>
 
       <div style={{ marginTop: '30px' }}>
-        <h2 style={{ color: '#87CEEB' }}>HỌC VIỆC (30)</h2>
+        <h2 style={{ color: '#87CEEB', borderBottom: '1px solid #333', paddingBottom: '10px' }}>HỌC VIỆC ({members.filter(m => m.type === 'Học việc').length}/30)</h2>
         {renderSlots('Học việc', 30)}
       </div>
     </div>
