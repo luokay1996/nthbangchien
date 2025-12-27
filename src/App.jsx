@@ -9,7 +9,7 @@ const supabase = createClient(
 const classInfo = {
   'Toái Mộng': { color: '#87CEEB' },
   'Thiết Y': { color: '#FFA500' },
-  'Huyết Hà': { color: '#8B0000' }, 
+  'Huyết Hà': { color: '#8B0000' },
   'Thần Tướng': { color: '#4169E1' },
   'Tố Vấn': { color: '#FF69B4' },
   'Cửu Linh': { color: '#800080' },
@@ -18,6 +18,7 @@ const classInfo = {
 function App() {
   const [members, setMembers] = useState([]);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isLimitEnabled, setIsLimitEnabled] = useState(true); // Mặc định bật chặn 1 người/1 ô
   const [form, setForm] = useState({ char_name: '', class_name: 'Toái Mộng', team_slot: null, type: 'Chính thức' });
 
   const fetchMembers = useCallback(async () => {
@@ -33,7 +34,6 @@ function App() {
     return () => supabase.removeChannel(channel);
   }, [fetchMembers]);
 
-  // HÀM ĐĂNG NHẬP ADMIN
   const handleAdminLogin = () => {
     const pass = prompt("Nhập mật mã Admin:");
     if (pass === "quymonquan2026") { 
@@ -47,6 +47,13 @@ function App() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.team_slot) return alert("Vui lòng click chọn 1 ô Slot bên dưới!");
+    
+    // KIỂM TRA GIỚI HẠN 1 NGƯỜI / 1 Ô (Nếu ko phải admin và chế độ đang bật)
+    const hasRegistered = localStorage.getItem('my_char_name');
+    if (!isAdmin && isLimitEnabled && hasRegistered) {
+      return alert(`Bạn đã đăng ký nhân vật [${hasRegistered}]. Mỗi người chỉ được đăng ký 1 ô! (Vui lòng xóa ô cũ nếu muốn đổi ô mới)`);
+    }
+
     if (members.some(m => m.type === form.type && m.team_slot === form.team_slot)) return alert("Ô này đã có người!");
 
     const { error } = await supabase.from('register_list').insert([form]);
@@ -58,7 +65,13 @@ function App() {
 
   const deleteMember = async (id, name) => {
     if (window.confirm(`Xác nhận hủy đăng ký cho [${name}]?`)) {
-      await supabase.from('register_list').delete().eq('id', id);
+      const { error } = await supabase.from('register_list').delete().eq('id', id);
+      if (!error) {
+        // Nếu người dùng tự xóa chính mình, xóa luôn dấu vết trong máy họ để họ đăng ký lại được
+        if (name === localStorage.getItem('my_char_name')) {
+          localStorage.removeItem('my_char_name');
+        }
+      }
     }
   };
 
@@ -99,26 +112,24 @@ function App() {
   return (
     <div style={{ backgroundColor: '#000', color: 'white', minHeight: '100vh', padding: '20px', textAlign: 'center', fontFamily: 'Arial' }}>
       
-      {/* NÚT ADMIN LOGIN - HIỆN RÕ Ở GÓC PHẢI */}
-      <div style={{ position: 'absolute', top: '15px', right: '15px', zIndex: 100 }}>
+      {/* KHỐI ADMIN CONTROL */}
+      <div style={{ position: 'absolute', top: '15px', right: '15px', display: 'flex', gap: '10px', zIndex: 100 }}>
+        {isAdmin && (
+          <button 
+            onClick={() => setIsLimitEnabled(!isLimitEnabled)}
+            style={{ background: isLimitEnabled ? '#222' : 'red', color: 'white', border: '1px solid #444', padding: '5px 12px', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}
+          >
+            GIỚI HẠN 1 Ô: {isLimitEnabled ? "BẬT" : "TẮT"}
+          </button>
+        )}
         <button 
           onClick={handleAdminLogin} 
-          style={{ 
-            background: isAdmin ? '#d4af37' : 'transparent', 
-            color: isAdmin ? '#000' : '#d4af37', 
-            border: '1px solid #d4af37', 
-            padding: '5px 12px', 
-            borderRadius: '4px', 
-            fontSize: '11px', 
-            fontWeight: 'bold',
-            cursor: 'pointer' 
-          }}
+          style={{ background: isAdmin ? '#d4af37' : 'transparent', color: isAdmin ? '#000' : '#d4af37', border: '1px solid #d4af37', padding: '5px 12px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer' }}
         >
           {isAdmin ? "ADMIN: ON" : "ADMIN LOGIN"}
         </button>
       </div>
 
-      {/* LOGO & TIÊU ĐỀ */}
       <div style={{ marginBottom: '20px' }}>
         <img src="/nth-logo.png" alt="Logo" style={{ width: '100px', margin: '0 auto', display: 'block' }} />
         <h1 style={{ color: 'gold', fontSize: '24px', margin: '10px 0' }}>BANG QUỶ MÔN QUAN - ĐĂNG KÝ BANG CHIẾN</h1>
@@ -159,7 +170,6 @@ function App() {
         </button>
       </div>
 
-      {/* 60 CHÍNH THỨC - 10 CỘT */}
       <h2 style={{ color: 'gold', fontSize: '18px', marginBottom: '15px' }}>ĐỘI HÌNH CHÍNH THỨC (60)</h2>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(10, 1fr)', gap: '8px', maxWidth: '1200px', margin: '0 auto 40px auto' }}>
         {[...Array(10)].map((_, colIdx) => (
@@ -170,16 +180,14 @@ function App() {
         ))}
       </div>
 
-      {/* 30 DỰ BỊ - 10 CỘT */}
       <h2 style={{ color: '#87CEEB', fontSize: '18px', marginBottom: '15px' }}>DỰ BỊ / HỌC VIỆC (30)</h2>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(10, 1fr)', gap: '8px', maxWidth: '1200px', margin: '0 auto' }}>
         {[...Array(30)].map((_, i) => renderSlotCell('Học việc', i + 1))}
       </div>
 
-      {/* GHI CHÚ */}
       <footer style={{ marginTop: '60px', padding: '20px', borderTop: '1px solid #222', maxWidth: '850px', margin: '60px auto 0 auto' }}>
         <p style={{ fontSize: '12px', color: '#444', lineHeight: '1.6' }}>
-          <strong style={{ color: '#666' }}>Lưu ý:</strong> Nếu thành viên xóa lịch sử trình duyệt hoặc đổi máy khác thì họ sẽ không tự xóa được nữa (lúc này cần nhờ các Đương gia (Admin) xóa hộ).
+          <strong style={{ color: '#666' }}>Lưu ý:</strong> Mỗi thiết bị chỉ được đăng ký tối đa 1 ô (trừ khi Admin tắt giới hạn). Nếu bạn xóa lịch sử trình duyệt hoặc đổi máy thì sẽ không tự xóa được nữa.
           <br />
           Mọi vấn đề về app xin liên hệ <span style={{ color: '#d4af37' }}>VôẢnhNhân (Zalo: Khoa)</span>
         </p>
