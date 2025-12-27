@@ -10,7 +10,7 @@ const classInfo = {
   'Toái Mộng': { color: '#87CEEB' },
   'Thiết Y': { color: '#FFA500' },
   'Huyết Hà': { color: '#8B0000' },
-  'Thần Tướng': { color: '#4169E1' },
+  'Thần Tương': { color: '#4169E1' },
   'Tố Vấn': { color: '#FF69B4' },
   'Cửu Linh': { color: '#800080' },
 };
@@ -204,7 +204,7 @@ function App() {
 
       <footer style={{ marginTop: '60px', padding: '20px', borderTop: '1px solid #222', maxWidth: '850px', margin: '60px auto 0 auto' }}>
         <p style={{ fontSize: '12px', color: '#444', lineHeight: '1.6' }}>
-          <strong style={{ color: '#666' }}>Lưu ý:</strong> Mỗi thiết bị chỉ đăng ký được 1 ô.
+          <strong style={{ color: '#666' }}>Lưu ý:</strong> Mỗi thiết bị chỉ đăng ký được 1 ô. Nếu thành viên xóa lịch sử trình duyệt hoặc đổi máy khác thì họ sẽ không tự xóa được nữa (lúc này cần nhờ các Đương gia (Admin) xóa hộ).
           <br />
           Mọi vấn đề liên hệ <span style={{ color: '#d4af37' }}>VôẢnhNhân (Zalo: Khoa)</span>
         </p>
