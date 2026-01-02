@@ -200,9 +200,14 @@ function App() {
             <div style={{ fontSize: '14px' }}>{members.filter(m => m.class_name === cls).length}</div>
           </div>
         ))}
-        <div style={{ paddingLeft: '8px', color: 'gold' }}>
+        <div style={{ paddingLeft: '8px', paddingRight: '8px', color: 'gold', borderRight: '1px solid #222' }}>
           <div style={{ fontSize: '10px', fontWeight: 'bold' }}>📦 VẬT TƯ</div>
           <div style={{ fontSize: '14px' }}>{members.filter(m => m.has_item).length}</div>
+        </div>
+        {/* THÊM TỔNG SỐ NGƯỜI ĐĂNG KÝ Ở ĐÂY */}
+        <div style={{ paddingLeft: '8px', color: '#00FF00' }}>
+          <div style={{ fontSize: '10px', fontWeight: 'bold' }}>TỔNG CỘNG</div>
+          <div style={{ fontSize: '14px' }}>{members.length}/90</div>
         </div>
       </div>
 
