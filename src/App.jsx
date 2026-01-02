@@ -10,7 +10,7 @@ const classInfo = {
   'Toái Mộng': { color: '#87CEEB' },
   'Thiết Y': { color: '#FFA500' },
   'Huyết Hà': { color: '#8B0000' },
-  'Thần Tượng': { color: '#4169E1' }, // Xanh dương đậm chuẩn
+  'Thần Tương': { color: '#4169e1ff' }, // Xanh dương đậm chuẩn
   'Tố Vấn': { color: '#FF69B4' },
   'Cửu Linh': { color: '#800080' },
 };
