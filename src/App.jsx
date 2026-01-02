@@ -36,6 +36,9 @@ function App() {
     return () => supabase.removeChannel(channel);
   }, [fetchMembers]);
 
+  // LOGIC ĐẾM CHUẨN: Chỉ đếm những member có tên và có vị trí slot
+  const actualCount = members.filter(m => m.char_name && m.team_slot).length;
+
   const handleAdminLogin = () => {
     const pass = prompt("Nhập mật mã Admin:");
     if (pass === "quymonquan2026") { 
@@ -159,7 +162,7 @@ function App() {
         {isAdmin && (
           <>
             <button onClick={() => setIsLimitEnabled(!isLimitEnabled)} style={{ background: isLimitEnabled ? '#222' : 'red', color: 'white', border: '1px solid #444', padding: '5px 10px', borderRadius: '4px', fontSize: '10px' }}>
-              GIỚI HẠN: {isLimitEnabled ? "BẬT" : "TẮT"}
+              GIỚI HẠN: {isLimitEnabled ? "BẬT" : "TẤT"}
             </button>
             <button onClick={handleResetBoard} style={{ background: 'blue', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>
               RESET TUẦN MỚI
@@ -197,7 +200,6 @@ function App() {
           </div>
         ))}
         
-        {/* CON SỐ THỐNG KÊ RIÊNG BIỆT - KHÔNG CỘNG VÀO TỔNG */}
         <div style={{ paddingLeft: '8px', paddingRight: '8px', borderLeft: '2px solid #333' }}>
           <div style={{ fontSize: '10px', fontWeight: 'bold', color: '#aaa' }}>HÃY CHỌN TÊN ĐỂ MANG 📦</div>
           <div style={{ fontSize: '14px', color: 'gold' }}>VẬT TƯ: {members.filter(m => m.has_item).length}</div>
@@ -205,10 +207,11 @@ function App() {
 
         <div style={{ paddingLeft: '8px', borderLeft: '2px solid #333' }}>
           <div style={{ fontSize: '10px', fontWeight: 'bold', color: '#00FF00' }}>TỔNG QUÂN SỐ</div>
-          <div style={{ fontSize: '14px', color: '#00FF00' }}>{members.length} / 90</div>
+          <div style={{ fontSize: '14px', color: '#00FF00' }}>{actualCount} / 90</div>
         </div>
       </div>
-
+      
+      {/* ... Phần Form và Grid giữ nguyên ... */}
       <form onSubmit={handleSubmit} style={{ marginBottom: '25px' }}>
         <input style={{ padding: '10px', background: '#111', color: 'white', border: '1px solid #333', borderRadius: '4px', width: '160px' }} placeholder="Tên nhân vật..." value={form.char_name} onChange={e => setForm({...form, char_name: e.target.value})} required />
         <select style={{ padding: '10px', background: '#111', color: 'white', border: '1px solid #333', margin: '0 5px', borderRadius: '4px' }} value={form.class_name} onChange={e => setForm({...form, class_name: e.target.value})}>
