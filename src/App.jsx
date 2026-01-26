@@ -36,8 +36,8 @@ function App() {
     return () => supabase.removeChannel(channel);
   }, [fetchMembers]);
 
-  // LOGIC ĐẾM CHUẨN: Chỉ đếm những member có tên và có vị trí slot
-  const actualCount = members.filter(m => m.char_name && m.team_slot).length;
+  // CHỈ ĐẾM THÀNH VIÊN CHÍNH THỨC (Không đếm dự bị)
+  const officialCount = members.filter(m => m.char_name && m.type === 'Chính thức').length;
 
   const handleAdminLogin = () => {
     const pass = prompt("Nhập mật mã Admin:");
@@ -67,25 +67,33 @@ function App() {
     if (!error) {
       setMembers(prev => prev.map(m => m.id === selectedMember.id ? { ...m, has_item: newStatus } : m));
       setSelectedMember(null);
-    } else {
-      alert("Lỗi: Bạn cần thêm cột 'has_item' (kiểu bool) vào bảng trên Supabase!");
     }
   };
 
-  const handleSlotClick = (type, slotNum) => {
+  const handleSlotClick = async (type, slotNum) => {
     const occupant = members.find(m => m.type === type && m.team_slot === slotNum);
     
-    if (occupant) {
-      setSelectedMember(occupant);
-      if (isAdmin) setMovingMember(movingMember?.id === occupant.id ? null : occupant);
+    // Nếu là Admin và đang có người được chọn để di chuyển/hoán đổi
+    if (isAdmin && movingMember) {
+      if (occupant) {
+        // Lệnh HOÁN ĐỔI (Swap): Đổi vị trí giữa movingMember và occupant
+        const updates = [
+          supabase.from('register_list').update({ type: occupant.type, team_slot: occupant.team_slot }).eq('id', movingMember.id),
+          supabase.from('register_list').update({ type: movingMember.type, team_slot: movingMember.team_slot }).eq('id', occupant.id)
+        ];
+        await Promise.all(updates);
+      } else {
+        // Lệnh DI CHUYỂN: Chuyển đến ô trống
+        await supabase.from('register_list').update({ type, team_slot: slotNum }).eq('id', movingMember.id);
+      }
+      setMovingMember(null);
+      fetchMembers();
       return;
     }
 
-    if (isAdmin && movingMember) {
-      supabase.from('register_list').update({ type, team_slot: slotNum }).eq('id', movingMember.id).then(() => {
-        setMovingMember(null);
-        fetchMembers();
-      });
+    if (occupant) {
+      setSelectedMember(occupant);
+      if (isAdmin) setMovingMember(occupant); // Admin chạm lần 1 để chọn người cần Swap
       return;
     }
 
@@ -126,6 +134,9 @@ function App() {
     const occupant = members.find(m => m.type === type && m.team_slot === slotNum);
     const isSelected = form.type === type && form.team_slot === slotNum;
     const isBeingMoved = movingMember && movingMember.id === occupant?.id;
+    
+    // Kiểm tra nếu là Trưởng nhóm (số đầu tiên của mỗi tổ đội 6 người)
+    const isLeaderSlot = type === 'Chính thức' && (slotNum - 1) % 6 === 0;
 
     return (
       <div key={`${type}-${slotNum}`} onClick={() => handleSlotClick(type, slotNum)}
@@ -137,6 +148,7 @@ function App() {
           fontSize: '10px', color: 'white', fontWeight: 'bold', animation: isBeingMoved ? 'pulse 1s infinite' : 'none'
         }}
       >
+        {isLeaderSlot && <span style={{ position: 'absolute', top: '1px', left: '2px', fontSize: '8px', opacity: 0.8 }}>🔑</span>}
         {occupant ? (
           <>
             <span style={{ textAlign: 'center', padding: '0 2px' }}>{occupant.char_name}</span>
@@ -155,6 +167,7 @@ function App() {
         @media (min-width: 1024px) { .team-grid { grid-template-columns: repeat(10, 1fr); } }
       `}</style>
 
+      {/* ADMIN CONTROLS */}
       <div style={{ position: 'absolute', top: '10px', right: '10px', display: 'flex', flexDirection: 'column', gap: '5px', alignItems: 'flex-end', zIndex: 100 }}>
         <button onClick={handleAdminLogin} style={{ background: isAdmin ? '#d4af37' : 'transparent', color: isAdmin ? '#000' : '#d4af37', border: '1px solid #d4af37', padding: '5px 10px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>
           {isAdmin ? "ADMIN: ON" : "ADMIN LOGIN"}
@@ -162,7 +175,7 @@ function App() {
         {isAdmin && (
           <>
             <button onClick={() => setIsLimitEnabled(!isLimitEnabled)} style={{ background: isLimitEnabled ? '#222' : 'red', color: 'white', border: '1px solid #444', padding: '5px 10px', borderRadius: '4px', fontSize: '10px' }}>
-              GIỚI HẠN: {isLimitEnabled ? "BẬT" : "TẤT"}
+              GIỚI HẠN: {isLimitEnabled ? "BẬT" : "TẮT"}
             </button>
             <button onClick={handleResetBoard} style={{ background: 'blue', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>
               RESET TUẦN MỚI
@@ -201,17 +214,16 @@ function App() {
         ))}
         
         <div style={{ paddingLeft: '8px', paddingRight: '8px', borderLeft: '2px solid #333' }}>
-          <div style={{ fontSize: '10px', fontWeight: 'bold', color: '#aaa' }}>HÃY CHỌN TÊN ĐỂ MANG 📦</div>
-          <div style={{ fontSize: '14px', color: 'gold' }}>VẬT TƯ: {members.filter(m => m.has_item).length}</div>
+          <div style={{ fontSize: '10px', fontWeight: 'bold', color: '#aaa' }}>📦 VẬT TƯ</div>
+          <div style={{ fontSize: '14px', color: 'gold' }}>{members.filter(m => m.has_item).length}</div>
         </div>
 
         <div style={{ paddingLeft: '8px', borderLeft: '2px solid #333' }}>
-          <div style={{ fontSize: '10px', fontWeight: 'bold', color: '#00FF00' }}>TỔNG QUÂN SỐ</div>
-          <div style={{ fontSize: '14px', color: '#00FF00' }}>{actualCount} / 90</div>
+          <div style={{ fontSize: '10px', fontWeight: 'bold', color: '#00FF00' }}>QUÂN SỐ CHÍNH</div>
+          <div style={{ fontSize: '14px', color: '#00FF00' }}>{officialCount} / 60</div>
         </div>
       </div>
       
-      {/* ... Phần Form và Grid giữ nguyên ... */}
       <form onSubmit={handleSubmit} style={{ marginBottom: '25px' }}>
         <input style={{ padding: '10px', background: '#111', color: 'white', border: '1px solid #333', borderRadius: '4px', width: '160px' }} placeholder="Tên nhân vật..." value={form.char_name} onChange={e => setForm({...form, char_name: e.target.value})} required />
         <select style={{ padding: '10px', background: '#111', color: 'white', border: '1px solid #333', margin: '0 5px', borderRadius: '4px' }} value={form.class_name} onChange={e => setForm({...form, class_name: e.target.value})}>
@@ -222,7 +234,12 @@ function App() {
         </button>
       </form>
 
-      {isAdmin && movingMember && <div style={{ color: 'gold', marginBottom: '10px', fontSize: '12px', fontWeight: 'bold' }}>Đang chọn [ {movingMember.char_name} ] - Chạm ô trống để chuyển hoặc ô khác để đổi chỗ!</div>}
+      {isAdmin && movingMember && (
+        <div style={{ color: 'gold', marginBottom: '10px', fontSize: '12px', fontWeight: 'bold', background: '#222', padding: '5px', display: 'inline-block', borderRadius: '4px' }}>
+          ĐANG CHỌN: [ {movingMember.char_name} ] <br/>
+          Chạm ô TRỐNG để dời | Chạm người KHÁC để HOÁN ĐỔI | Chạm lại chính mình để hủy
+        </div>
+      )}
 
       <h2 style={{ color: 'gold', fontSize: '15px', marginBottom: '10px' }}>ĐỘI HÌNH CHÍNH THỨC (60)</h2>
       <div className="team-grid">
