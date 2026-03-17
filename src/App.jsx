@@ -35,7 +35,6 @@ function App() {
   const fetchData = useCallback(async () => {
     const { data: mems } = await supabase.from('register_list').select('*');
     const { data: groups } = await supabase.from('team_groups').select('*');
-    
     if (mems) setMembers(mems);
     if (groups) {
       const groupMap = Object.fromEntries(groups.map(g => [g.team_id, g.group_name]));
@@ -49,7 +48,6 @@ function App() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'register_list' }, fetchData)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'team_groups' }, fetchData)
       .subscribe();
-    
     return () => supabase.removeChannel(channel);
   }, [fetchData]);
 
@@ -57,10 +55,7 @@ function App() {
     if (!isAdmin) return;
     setTeamGroups(prev => ({ ...prev, [teamId]: newGroupName }));
     const { error } = await supabase.from('team_groups').update({ group_name: newGroupName }).eq('team_id', teamId);
-    if (error) {
-      console.error("Lỗi cập nhật:", error);
-      fetchData();
-    }
+    if (error) fetchData();
   };
 
   const officialCount = members.filter(m => m.char_name && m.type === 'Chính thức').length;
@@ -114,15 +109,28 @@ function App() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.team_slot) return alert("Vui lòng chọn ô Slot!");
+    
+    // Khôi phục logic giới hạn đăng ký
+    const savedName = localStorage.getItem('my_char_name');
+    if (!isAdmin && isLimitEnabled && savedName && members.some(m => m.char_name === savedName)) {
+      return alert(`Bạn đã đăng ký nhân vật [${savedName}]. Mỗi người chỉ được 1 ô!`);
+    }
+
     const { error } = await supabase.from('register_list').insert([form]);
-    if (!error) setForm({ ...form, char_name: '', team_slot: null });
+    if (!error) {
+      localStorage.setItem('my_char_name', form.char_name);
+      setForm({ ...form, char_name: '', team_slot: null });
+    }
   };
 
   const deleteMember = async () => {
     if (!selectedMember) return;
     if (window.confirm(`Xác nhận xóa [${selectedMember.char_name}]?`)) {
-      await supabase.from('register_list').delete().eq('id', selectedMember.id);
-      setSelectedMember(null);
+      const { error } = await supabase.from('register_list').delete().eq('id', selectedMember.id);
+      if (!error) {
+        if (selectedMember.char_name === localStorage.getItem('my_char_name')) localStorage.removeItem('my_char_name');
+        setSelectedMember(null);
+      }
     }
   };
 
@@ -139,15 +147,22 @@ function App() {
           backgroundColor: occupant ? classInfo[occupant.class_name]?.color : '#111',
           border: isBeingMoved ? '2px solid white' : isSelected ? '2px solid gold' : '1px solid #333',
           display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
-          fontSize: '10px', color: occupant?.class_name === 'Long Ngâm' ? '#000' : 'white', fontWeight: 'bold'
+          fontSize: '10px', color: occupant?.class_name === 'Long Ngâm' ? '#000' : 'white', fontWeight: 'bold',
+          padding: '0 4px', overflow: 'hidden'
         }}
       >
         {isLeaderSlot && <span style={{ position: 'absolute', top: '1px', left: '2px', fontSize: '8px', opacity: 0.8 }}>🔑</span>}
         {occupant ? (
-          <>
-            <span style={{ textAlign: 'center' }}>{occupant.char_name.substring(0, 8)}</span>
-            {occupant.has_item && <span style={{ position: 'absolute', top: '1px', right: '2px' }}>📦</span>}
-          </>
+          <div style={{ 
+            width: '100%', 
+            textAlign: 'center', 
+            whiteSpace: 'nowrap', 
+            overflow: 'hidden', 
+            textOverflow: 'ellipsis' 
+          }}>
+            {occupant.char_name}
+            {occupant.has_item && <span style={{ marginLeft: '2px' }}>📦</span>}
+          </div>
         ) : `S${slotNum}`}
       </div>
     );
@@ -162,18 +177,23 @@ function App() {
         .group-select:disabled { cursor: default; border-style: dashed; color: #fff; opacity: 1; }
       `}</style>
 
-      {/* ADMIN CONTROLS */}
       <div style={{ position: 'absolute', top: '10px', right: '10px', display: 'flex', flexDirection: 'column', gap: '5px', alignItems: 'flex-end', zIndex: 100 }}>
         <button onClick={handleAdminLogin} style={{ background: isAdmin ? '#d4af37' : 'transparent', color: isAdmin ? '#000' : '#d4af37', border: '1px solid #d4af37', padding: '5px 10px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>
           {isAdmin ? "ADMIN: ON" : "ADMIN LOGIN"}
         </button>
-        {isAdmin && <button onClick={handleResetBoard} style={{ background: 'blue', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '4px', fontSize: '10px' }}>RESET TUẦN MỚI</button>}
+        {isAdmin && (
+          <>
+            <button onClick={() => setIsLimitEnabled(!isLimitEnabled)} style={{ background: isLimitEnabled ? '#222' : 'red', color: 'white', border: '1px solid #444', padding: '5px 10px', borderRadius: '4px', fontSize: '10px' }}>
+              GIỚI HẠN: {isLimitEnabled ? "BẬT" : "TẮT"}
+            </button>
+            <button onClick={handleResetBoard} style={{ background: 'blue', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '4px', fontSize: '10px' }}>RESET</button>
+          </>
+        )}
       </div>
 
       <img src="/nth-logo.png" alt="Logo" style={{ width: '60px', margin: '0 auto', display: 'block' }} />
       <h1 style={{ color: 'gold', fontSize: '20px', margin: '10px 0' }}>BANG QUỶ MÔN QUAN</h1>
 
-      {/* THỐNG KÊ QUÂN SỐ CHI TIẾT */}
       <div style={{ display: 'flex', justifyContent: 'center', gap: '5px', background: '#0a0a0a', padding: '10px', borderRadius: '8px', border: '1px solid #222', marginBottom: '15px', flexWrap: 'wrap' }}>
         {Object.keys(classInfo).map(cls => (
           <div key={cls} style={{ borderRight: '1px solid #222', paddingRight: '5px', minWidth: '60px' }}>
@@ -197,7 +217,6 @@ function App() {
         </button>
       </form>
 
-      <h2 style={{ color: 'gold', fontSize: '15px', marginBottom: '10px' }}>ĐỘI HÌNH CHÍNH THỨC (60)</h2>
       <div className="team-grid">
         {[...Array(10)].map((_, col) => {
           const teamNum = col + 1;
@@ -210,13 +229,7 @@ function App() {
             }}>
               <div style={{ marginBottom: '6px' }}>
                 <span style={{ color: settings.label, fontSize: '11px', fontWeight: 'bold' }}>TEAM {teamNum}</span>
-                <select 
-                  className="group-select"
-                  style={{ borderColor: settings.border }}
-                  value={currentGroup}
-                  disabled={!isAdmin}
-                  onChange={(e) => handleGroupChange(teamNum, e.target.value)}
-                >
+                <select className="group-select" style={{ borderColor: settings.border }} value={currentGroup} disabled={!isAdmin} onChange={(e) => handleGroupChange(teamNum, e.target.value)}>
                   {Object.keys(groupSettings).map(g => <option key={g} value={g}>{g}</option>)}
                 </select>
               </div>
@@ -226,7 +239,7 @@ function App() {
         })}
       </div>
 
-      <h2 style={{ color: '#87CEEB', fontSize: '15px', margin: '30px 0 10px 0' }}>DỰ BỊ / HỌC VIỆC (30)</h2>
+      <h2 style={{ color: '#87CEEB', fontSize: '15px', margin: '30px 0 10px 0' }}>DỰ BỊ (30)</h2>
       <div className="team-grid">
         {[...Array(30)].map((_, i) => renderSlotCell('Học việc', i + 1))}
       </div>
@@ -238,7 +251,7 @@ function App() {
             {(isAdmin || selectedMember.char_name === localStorage.getItem('my_char_name')) && (
               <>
                 <button onClick={toggleItem} style={{ flex: 1, background: selectedMember.has_item ? '#444' : '#28a745', color: 'white', border: 'none', padding: '10px', borderRadius: '4px' }}>
-                  {selectedMember.has_item ? "BỎ VẬT TƯ" : "VẬT TƯ 📦"}
+                   {selectedMember.has_item ? "BỎ VẬT TƯ" : "VẬT TƯ 📦"}
                 </button>
                 <button onClick={deleteMember} style={{ flex: 1, background: '#dc3545', color: 'white', border: 'none', padding: '10px', borderRadius: '4px' }}>XÓA</button>
               </>
