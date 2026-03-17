@@ -53,29 +53,15 @@ function App() {
     return () => supabase.removeChannel(channel);
   }, [fetchData]);
 
-  // --- PHẦN FIX LỖI HIỂN THỊ ---
   const handleGroupChange = async (teamId, newGroupName) => {
     if (!isAdmin) return;
-    
-    // 1. Cập nhật giao diện trên máy Admin ngay lập tức (Optimistic Update)
-    setTeamGroups(prev => ({
-      ...prev,
-      [teamId]: newGroupName
-    }));
-
-    // 2. Gửi lệnh update lên Database ngầm
-    const { error } = await supabase
-      .from('team_groups')
-      .update({ group_name: newGroupName })
-      .eq('team_id', teamId);
-    
+    setTeamGroups(prev => ({ ...prev, [teamId]: newGroupName }));
+    const { error } = await supabase.from('team_groups').update({ group_name: newGroupName }).eq('team_id', teamId);
     if (error) {
       console.error("Lỗi cập nhật:", error);
-      // Nếu lỗi thì fetch lại để đồng bộ đúng với Database
       fetchData();
     }
   };
-  // ----------------------------
 
   const officialCount = members.filter(m => m.char_name && m.type === 'Chính thức').length;
 
@@ -176,6 +162,7 @@ function App() {
         .group-select:disabled { cursor: default; border-style: dashed; color: #fff; opacity: 1; }
       `}</style>
 
+      {/* ADMIN CONTROLS */}
       <div style={{ position: 'absolute', top: '10px', right: '10px', display: 'flex', flexDirection: 'column', gap: '5px', alignItems: 'flex-end', zIndex: 100 }}>
         <button onClick={handleAdminLogin} style={{ background: isAdmin ? '#d4af37' : 'transparent', color: isAdmin ? '#000' : '#d4af37', border: '1px solid #d4af37', padding: '5px 10px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>
           {isAdmin ? "ADMIN: ON" : "ADMIN LOGIN"}
@@ -186,8 +173,18 @@ function App() {
       <img src="/nth-logo.png" alt="Logo" style={{ width: '60px', margin: '0 auto', display: 'block' }} />
       <h1 style={{ color: 'gold', fontSize: '20px', margin: '10px 0' }}>BANG QUỶ MÔN QUAN</h1>
 
-      <div style={{ display: 'flex', justifyContent: 'center', background: '#0a0a0a', padding: '10px', borderRadius: '8px', marginBottom: '15px' }}>
-        <div style={{ color: '#00FF00', fontSize: '14px', fontWeight: 'bold' }}>QUÂN SỐ: {officialCount} / 60</div>
+      {/* THỐNG KÊ QUÂN SỐ CHI TIẾT */}
+      <div style={{ display: 'flex', justifyContent: 'center', gap: '5px', background: '#0a0a0a', padding: '10px', borderRadius: '8px', border: '1px solid #222', marginBottom: '15px', flexWrap: 'wrap' }}>
+        {Object.keys(classInfo).map(cls => (
+          <div key={cls} style={{ borderRight: '1px solid #222', paddingRight: '5px', minWidth: '60px' }}>
+            <div style={{ color: classInfo[cls].color, fontSize: '10px', fontWeight: 'bold' }}>{cls}</div>
+            <div style={{ fontSize: '14px' }}>{members.filter(m => m.class_name === cls).length}</div>
+          </div>
+        ))}
+        <div style={{ paddingLeft: '8px', borderLeft: '2px solid #333' }}>
+          <div style={{ fontSize: '10px', fontWeight: 'bold', color: '#00FF00' }}>QUÂN SỐ</div>
+          <div style={{ fontSize: '14px', color: '#00FF00' }}>{officialCount} / 60</div>
+        </div>
       </div>
       
       <form onSubmit={handleSubmit} style={{ marginBottom: '25px' }}>
@@ -195,9 +192,12 @@ function App() {
         <select style={{ padding: '10px', background: '#111', color: 'white', border: '1px solid #333', margin: '0 5px', borderRadius: '4px' }} value={form.class_name} onChange={e => setForm({...form, class_name: e.target.value})}>
           {Object.keys(classInfo).map(c => <option key={c} value={c}>{c}</option>)}
         </select>
-        <button type="submit" style={{ padding: '10px 15px', background: 'gold', border: 'none', borderRadius: '4px', fontWeight: 'bold' }}>ĐĂNG KÝ</button>
+        <button type="submit" style={{ padding: '10px 15px', background: 'gold', border: 'none', borderRadius: '4px', fontWeight: 'bold' }}>
+           ĐĂNG KÝ {form.team_slot ? `(S${form.team_slot})` : ''}
+        </button>
       </form>
 
+      <h2 style={{ color: 'gold', fontSize: '15px', marginBottom: '10px' }}>ĐỘI HÌNH CHÍNH THỨC (60)</h2>
       <div className="team-grid">
         {[...Array(10)].map((_, col) => {
           const teamNum = col + 1;
@@ -226,7 +226,7 @@ function App() {
         })}
       </div>
 
-      <h2 style={{ color: '#87CEEB', fontSize: '15px', margin: '30px 0 10px 0' }}>DỰ BỊ (30)</h2>
+      <h2 style={{ color: '#87CEEB', fontSize: '15px', margin: '30px 0 10px 0' }}>DỰ BỊ / HỌC VIỆC (30)</h2>
       <div className="team-grid">
         {[...Array(30)].map((_, i) => renderSlotCell('Học việc', i + 1))}
       </div>
@@ -235,9 +235,11 @@ function App() {
         <div style={{ position: 'fixed', bottom: '20px', left: '50%', transform: 'translateX(-50%)', background: '#1a1a1a', padding: '15px', borderRadius: '10px', border: '2px solid gold', zIndex: 1000, width: '90%', maxWidth: '400px' }}>
           <div style={{ marginBottom: '10px', fontWeight: 'bold', color: 'gold' }}>{selectedMember.char_name}</div>
           <div style={{ display: 'flex', gap: '10px' }}>
-            {isAdmin && (
+            {(isAdmin || selectedMember.char_name === localStorage.getItem('my_char_name')) && (
               <>
-                <button onClick={toggleItem} style={{ flex: 1, background: '#28a745', color: 'white', border: 'none', padding: '10px', borderRadius: '4px' }}>VẬT TƯ 📦</button>
+                <button onClick={toggleItem} style={{ flex: 1, background: selectedMember.has_item ? '#444' : '#28a745', color: 'white', border: 'none', padding: '10px', borderRadius: '4px' }}>
+                  {selectedMember.has_item ? "BỎ VẬT TƯ" : "VẬT TƯ 📦"}
+                </button>
                 <button onClick={deleteMember} style={{ flex: 1, background: '#dc3545', color: 'white', border: 'none', padding: '10px', borderRadius: '4px' }}>XÓA</button>
               </>
             )}
