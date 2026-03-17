@@ -30,11 +30,8 @@ function App() {
   const [movingMember, setMovingMember] = useState(null);
   const [selectedMember, setSelectedMember] = useState(null);
   const [form, setForm] = useState({ char_name: '', class_name: 'Toái Mộng', team_slot: null, type: 'Chính thức' });
-  
-  // State lưu trữ nhóm từ Database
   const [teamGroups, setTeamGroups] = useState({});
 
-  // 1. Hàm fetch dữ liệu tổng hợp (Thành viên + Nhóm)
   const fetchData = useCallback(async () => {
     const { data: mems } = await supabase.from('register_list').select('*');
     const { data: groups } = await supabase.from('team_groups').select('*');
@@ -46,7 +43,6 @@ function App() {
     }
   }, []);
 
-  // 2. Thiết lập Realtime lắng nghe thay đổi
   useEffect(() => {
     fetchData();
     const channel = supabase.channel('global-live-sync')
@@ -57,22 +53,29 @@ function App() {
     return () => supabase.removeChannel(channel);
   }, [fetchData]);
 
-  // 3. Hàm cập nhật Nhóm lên Database (Chỉ Admin)
+  // --- PHẦN FIX LỖI HIỂN THỊ ---
   const handleGroupChange = async (teamId, newGroupName) => {
     if (!isAdmin) return;
     
-    // Cập nhật Database
+    // 1. Cập nhật giao diện trên máy Admin ngay lập tức (Optimistic Update)
+    setTeamGroups(prev => ({
+      ...prev,
+      [teamId]: newGroupName
+    }));
+
+    // 2. Gửi lệnh update lên Database ngầm
     const { error } = await supabase
       .from('team_groups')
       .update({ group_name: newGroupName })
       .eq('team_id', teamId);
     
     if (error) {
-      console.error("Lỗi cập nhật nhóm:", error);
-      alert("Không thể lưu nhóm. Hãy kiểm tra bảng team_groups trong DB!");
+      console.error("Lỗi cập nhật:", error);
+      // Nếu lỗi thì fetch lại để đồng bộ đúng với Database
+      fetchData();
     }
-    // Không cần setTeamGroups thủ công vì Realtime sẽ tự gọi fetchData()
   };
+  // ----------------------------
 
   const officialCount = members.filter(m => m.char_name && m.type === 'Chính thức').length;
 
@@ -87,7 +90,7 @@ function App() {
   };
 
   const handleResetBoard = async () => {
-    if (window.confirm("Xóa sạch danh sách tuần này? (Nhóm chiến thuật sẽ giữ nguyên)")) {
+    if (window.confirm("Xóa sạch danh sách tuần này?")) {
       const { error } = await supabase.from('register_list').delete().neq('id', 0);
       if (!error) fetchData();
     }
@@ -125,25 +128,15 @@ function App() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.team_slot) return alert("Vui lòng chọn ô Slot!");
-    const savedName = localStorage.getItem('my_char_name');
-    if (!isAdmin && isLimitEnabled && savedName && members.some(m => m.char_name === savedName)) {
-      return alert(`Bạn đã đăng ký nhân vật [${savedName}]. Mỗi người chỉ được 1 ô!`);
-    }
     const { error } = await supabase.from('register_list').insert([form]);
-    if (!error) {
-      localStorage.setItem('my_char_name', form.char_name);
-      setForm({ ...form, char_name: '', team_slot: null });
-    }
+    if (!error) setForm({ ...form, char_name: '', team_slot: null });
   };
 
   const deleteMember = async () => {
     if (!selectedMember) return;
     if (window.confirm(`Xác nhận xóa [${selectedMember.char_name}]?`)) {
-      const { error } = await supabase.from('register_list').delete().eq('id', selectedMember.id);
-      if (!error) {
-        if (selectedMember.char_name === localStorage.getItem('my_char_name')) localStorage.removeItem('my_char_name');
-        setSelectedMember(null);
-      }
+      await supabase.from('register_list').delete().eq('id', selectedMember.id);
+      setSelectedMember(null);
     }
   };
 
@@ -160,13 +153,13 @@ function App() {
           backgroundColor: occupant ? classInfo[occupant.class_name]?.color : '#111',
           border: isBeingMoved ? '2px solid white' : isSelected ? '2px solid gold' : '1px solid #333',
           display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
-          fontSize: '10px', color: occupant?.class_name === 'Long Ngâm' ? '#000' : 'white', fontWeight: 'bold', animation: isBeingMoved ? 'pulse 1s infinite' : 'none'
+          fontSize: '10px', color: occupant?.class_name === 'Long Ngâm' ? '#000' : 'white', fontWeight: 'bold'
         }}
       >
         {isLeaderSlot && <span style={{ position: 'absolute', top: '1px', left: '2px', fontSize: '8px', opacity: 0.8 }}>🔑</span>}
         {occupant ? (
           <>
-            <span style={{ textAlign: 'center', padding: '0 2px' }}>{occupant.char_name.substring(0, 8)}</span>
+            <span style={{ textAlign: 'center' }}>{occupant.char_name.substring(0, 8)}</span>
             {occupant.has_item && <span style={{ position: 'absolute', top: '1px', right: '2px' }}>📦</span>}
           </>
         ) : `S${slotNum}`}
@@ -177,34 +170,23 @@ function App() {
   return (
     <div style={{ backgroundColor: '#000', color: 'white', minHeight: '100vh', padding: '15px', textAlign: 'center', fontFamily: 'Arial' }}>
       <style>{`
-        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
         .team-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; max-width: 1200px; margin: 0 auto; }
         @media (min-width: 1024px) { .team-grid { grid-template-columns: repeat(10, 1fr); } }
         .group-select { width: 100%; background: #000; color: #fff; border: 1px solid #444; font-size: 10px; border-radius: 3px; cursor: pointer; margin-top: 5px; padding: 3px; font-weight: bold; appearance: none; text-align: center; }
         .group-select:disabled { cursor: default; border-style: dashed; color: #fff; opacity: 1; }
       `}</style>
 
-      {/* ADMIN CONTROLS */}
       <div style={{ position: 'absolute', top: '10px', right: '10px', display: 'flex', flexDirection: 'column', gap: '5px', alignItems: 'flex-end', zIndex: 100 }}>
         <button onClick={handleAdminLogin} style={{ background: isAdmin ? '#d4af37' : 'transparent', color: isAdmin ? '#000' : '#d4af37', border: '1px solid #d4af37', padding: '5px 10px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>
           {isAdmin ? "ADMIN: ON" : "ADMIN LOGIN"}
         </button>
-        {isAdmin && (
-          <>
-            <button onClick={() => setIsLimitEnabled(!isLimitEnabled)} style={{ background: isLimitEnabled ? '#222' : 'red', color: 'white', border: '1px solid #444', padding: '5px 10px', borderRadius: '4px', fontSize: '10px' }}>
-              GIỚI HẠN: {isLimitEnabled ? "BẬT" : "TẮT"}
-            </button>
-            <button onClick={handleResetBoard} style={{ background: 'blue', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>
-              RESET TUẦN MỚI
-            </button>
-          </>
-        )}
+        {isAdmin && <button onClick={handleResetBoard} style={{ background: 'blue', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '4px', fontSize: '10px' }}>RESET TUẦN MỚI</button>}
       </div>
 
       <img src="/nth-logo.png" alt="Logo" style={{ width: '60px', margin: '0 auto', display: 'block' }} />
       <h1 style={{ color: 'gold', fontSize: '20px', margin: '10px 0' }}>BANG QUỶ MÔN QUAN</h1>
 
-      <div style={{ display: 'flex', justifyContent: 'center', gap: '5px', background: '#0a0a0a', padding: '10px', borderRadius: '8px', border: '1px solid #222', marginBottom: '15px' }}>
+      <div style={{ display: 'flex', justifyContent: 'center', background: '#0a0a0a', padding: '10px', borderRadius: '8px', marginBottom: '15px' }}>
         <div style={{ color: '#00FF00', fontSize: '14px', fontWeight: 'bold' }}>QUÂN SỐ: {officialCount} / 60</div>
       </div>
       
@@ -213,24 +195,17 @@ function App() {
         <select style={{ padding: '10px', background: '#111', color: 'white', border: '1px solid #333', margin: '0 5px', borderRadius: '4px' }} value={form.class_name} onChange={e => setForm({...form, class_name: e.target.value})}>
           {Object.keys(classInfo).map(c => <option key={c} value={c}>{c}</option>)}
         </select>
-        <button type="submit" style={{ padding: '10px 15px', background: 'gold', border: 'none', borderRadius: '4px', fontWeight: 'bold' }}>
-          ĐĂNG KÝ {form.team_slot ? `(S${form.team_slot})` : ''}
-        </button>
+        <button type="submit" style={{ padding: '10px 15px', background: 'gold', border: 'none', borderRadius: '4px', fontWeight: 'bold' }}>ĐĂNG KÝ</button>
       </form>
 
-      <h2 style={{ color: 'gold', fontSize: '15px', marginBottom: '10px' }}>ĐỘI HÌNH CHÍNH THỨC (60)</h2>
       <div className="team-grid">
         {[...Array(10)].map((_, col) => {
           const teamNum = col + 1;
-          const currentGroup = teamGroups[teamNum] || 'Nhóm 1'; // Lấy từ Database
+          const currentGroup = teamGroups[teamNum] || 'Nhóm 1';
           const settings = groupSettings[currentGroup];
           return (
             <div key={col} style={{ 
-              background: settings.bg, 
-              padding: '8px', 
-              borderRadius: '8px', 
-              border: `2px solid ${settings.border}`,
-              transition: 'all 0.3s ease',
+              background: settings.bg, padding: '8px', borderRadius: '8px', border: `2px solid ${settings.border}`,
               boxShadow: currentGroup !== 'Nhóm 1' ? `0 0 10px ${settings.border}33` : 'none'
             }}>
               <div style={{ marginBottom: '6px' }}>
@@ -251,7 +226,7 @@ function App() {
         })}
       </div>
 
-      <h2 style={{ color: '#87CEEB', fontSize: '15px', margin: '30px 0 10px 0' }}>DỰ BỊ / HỌC VIỆC (30)</h2>
+      <h2 style={{ color: '#87CEEB', fontSize: '15px', margin: '30px 0 10px 0' }}>DỰ BỊ (30)</h2>
       <div className="team-grid">
         {[...Array(30)].map((_, i) => renderSlotCell('Học việc', i + 1))}
       </div>
@@ -260,11 +235,9 @@ function App() {
         <div style={{ position: 'fixed', bottom: '20px', left: '50%', transform: 'translateX(-50%)', background: '#1a1a1a', padding: '15px', borderRadius: '10px', border: '2px solid gold', zIndex: 1000, width: '90%', maxWidth: '400px' }}>
           <div style={{ marginBottom: '10px', fontWeight: 'bold', color: 'gold' }}>{selectedMember.char_name}</div>
           <div style={{ display: 'flex', gap: '10px' }}>
-            {(isAdmin || selectedMember.char_name === localStorage.getItem('my_char_name')) && (
+            {isAdmin && (
               <>
-                <button onClick={toggleItem} style={{ flex: 1, background: selectedMember.has_item ? '#444' : '#28a745', color: 'white', border: 'none', padding: '10px', borderRadius: '4px' }}>
-                  {selectedMember.has_item ? "BỎ VẬT TƯ" : "VẬT TƯ 📦"}
-                </button>
+                <button onClick={toggleItem} style={{ flex: 1, background: '#28a745', color: 'white', border: 'none', padding: '10px', borderRadius: '4px' }}>VẬT TƯ 📦</button>
                 <button onClick={deleteMember} style={{ flex: 1, background: '#dc3545', color: 'white', border: 'none', padding: '10px', borderRadius: '4px' }}>XÓA</button>
               </>
             )}
