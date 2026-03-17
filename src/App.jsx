@@ -61,6 +61,7 @@ function App() {
   }, [fetchData]);
 
   const updateTeamPosition = async (teamId, x, y) => {
+    // Cập nhật UI ngay lập tức để mượt mà (Optimistic Update)
     setTeamPositions(prev => ({ ...prev, [teamId]: { x, y } }));
     await supabase.from('team_positions').update({ pos_x: x, pos_y: y }).eq('team_id', teamId);
   };
@@ -68,11 +69,16 @@ function App() {
   const handleDragEnd = (e, teamId) => {
     if (!mapRef.current) return;
     const rect = mapRef.current.getBoundingClientRect();
+    
+    // Tính toán tọa độ % dựa trên vị trí chuột thả ra
     const x = ((e.clientX - rect.left) / rect.width) * 100;
     const y = ((e.clientY - rect.top) / rect.height) * 100;
-    if (x >= 0 && x <= 100 && y >= 0 && y <= 100) {
-      updateTeamPosition(teamId, x, y);
-    }
+    
+    // Giới hạn trong khung bản đồ
+    const safeX = Math.max(0, Math.min(100, x));
+    const safeY = Math.max(0, Math.min(100, y));
+    
+    updateTeamPosition(teamId, safeX, safeY);
   };
 
   const handleGroupChange = async (teamId, newGroupName) => {
@@ -183,22 +189,27 @@ function App() {
   };
 
   return (
-    <div style={{ backgroundColor: '#000', color: 'white', minHeight: '100vh', padding: '15px', textAlign: 'center', fontFamily: 'Arial' }}>
+    <div style={{ backgroundColor: '#000', color: 'white', minHeight: '100vh', padding: '15px', textAlign: 'center', fontFamily: 'Arial', userSelect: 'none' }}>
       <style>{`
         .team-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; max-width: 1200px; margin: 0 auto; }
         @media (min-width: 1024px) { .team-grid { grid-template-columns: repeat(10, 1fr); } }
         .group-select { width: 100%; background: #000; color: #fff; border: 1px solid #444; font-size: 10px; border-radius: 3px; cursor: pointer; margin-top: 5px; padding: 3px; font-weight: bold; appearance: none; text-align: center; }
         .group-select:disabled { cursor: default; border-style: dashed; color: #fff; opacity: 1; }
         
-        .map-section { max-width: 800px; margin: 40px auto; padding: 20px; background: #0a0a0a; border-radius: 12px; border: 1px solid #333; position: relative; }
-        .map-container { position: relative; width: 100%; border-radius: 8px; overflow: hidden; border: 2px solid #444; margin-top: 15px; cursor: crosshair; }
+        .map-section { max-width: 900px; margin: 40px auto; padding: 20px; background: #0a0a0a; border-radius: 12px; border: 1px solid #333; position: relative; }
+        .map-container { position: relative; width: 100%; border-radius: 8px; overflow: hidden; border: 2px solid #444; margin-top: 15px; }
+        .map-bg { width: 100%; display: block; opacity: 0.8; pointer-events: none; -webkit-user-drag: none; }
+        
         .team-node { 
-          position: absolute; width: 32px; height: 32px; border-radius: 50%; 
-          display: flex; alignItems: center; justifyContent: center; 
-          font-size: 11px; font-weight: bold; color: #000; cursor: move; 
-          transform: translate(-50%, -50%); border: 2px solid #fff; box-shadow: 0 0 10px rgba(0,0,0,0.5);
-          user-select: none; z-index: 10;
+          position: absolute; width: 34px; height: 34px; border-radius: 50%; 
+          display: flex; align-items: center; justify-content: center; 
+          font-size: 12px; font-weight: bold; color: #000; cursor: move; 
+          transform: translate(-50%, -50%); border: 2px solid #fff; 
+          box-shadow: 0 0 15px rgba(0,0,0,0.8);
+          z-index: 10; transition: transform 0.1s;
+          touch-action: none;
         }
+        .team-node:active { transform: translate(-50%, -50%) scale(1.2); z-index: 100; }
       `}</style>
 
       {/* ADMIN CONTROLS */}
@@ -272,32 +283,35 @@ function App() {
         {[...Array(30)].map((_, i) => renderSlotCell('Học việc', i + 1))}
       </div>
 
-      {/* MAP SECTION - Đặt ở cuối bảng */}
+      {/* MAP SECTION */}
       <div className="map-section">
         <h3 style={{ color: 'gold', margin: '0 0 5px 0', fontSize: '18px' }}>CHỈ ĐẠO CHIẾN THUẬT</h3>
-        <p style={{ fontSize: '12px', color: '#aaa' }}>Kéo các nút T1-T10 vào vị trí tương ứng trên Map</p>
+        <p style={{ fontSize: '12px', color: '#aaa' }}>Kéo các nút T1-T10 vào vị trí tương ứng trên bản đồ</p>
         
         <div className="map-container" ref={mapRef}>
           <img 
             src="https://i.postimg.cc/SsMMSZLG/unnam2ed.jpg" 
             alt="Tactical Map" 
-            style={{ width: '100%', display: 'block', opacity: 0.9 }} 
+            className="map-bg"
           />
           {[...Array(10)].map((_, i) => {
             const teamId = i + 1;
-            const pos = teamPositions[teamId] || { x: 5 * teamId, y: 10 };
+            // Nếu chưa có tọa độ trong DB, tạo khoảng cách 8% giữa mỗi nút
+            const pos = teamPositions[teamId] || { x: 8 * teamId, y: 15 };
             const groupColor = groupSettings[teamGroups[teamId] || 'Nhóm 1'].border;
             
             return (
               <div 
                 key={teamId}
-                draggable
+                draggable={isAdmin}
                 onDragEnd={(e) => handleDragEnd(e, teamId)}
                 className="team-node"
                 style={{ 
                   left: `${pos.x}%`, 
                   top: `${pos.y}%`, 
-                  backgroundColor: groupColor === '#444' ? '#fff' : groupColor 
+                  backgroundColor: groupColor === '#444' ? '#fff' : groupColor,
+                  opacity: isAdmin ? 1 : 0.9,
+                  cursor: isAdmin ? 'move' : 'default'
                 }}
               >
                 T{teamId}
@@ -305,8 +319,8 @@ function App() {
             );
           })}
         </div>
-        <div style={{ marginTop: '15px', fontSize: '12px', color: '#888', textAlign: 'left' }}>
-            * Màu nút tự động cập nhật theo màu Nhóm của từng Team.
+        <div style={{ marginTop: '15px', fontSize: '11px', color: '#666', textAlign: 'left', fontStyle: 'italic' }}>
+            * Lưu ý: Chỉ Admin mới có quyền kéo thả các nút vị trí.
         </div>
       </div>
 
