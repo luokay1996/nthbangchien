@@ -13,7 +13,7 @@ const classInfo = {
   'Thần Tương': { color: '#4169e1ff' }, 
   'Tố Vấn': { color: '#FF69B4' },
   'Cửu Linh': { color: '#800080' },
-  'Long Ngâm': { color: '#66FFFF' },
+  'Long Ngâm': { color: '#66FFFF' }, // Đã thêm Class mới tại đây
 };
 
 function App() {
@@ -37,6 +37,7 @@ function App() {
     return () => supabase.removeChannel(channel);
   }, [fetchMembers]);
 
+  // CHỈ ĐẾM THÀNH VIÊN CHÍNH THỨC (Không đếm dự bị)
   const officialCount = members.filter(m => m.char_name && m.type === 'Chính thức').length;
 
   const handleAdminLogin = () => {
@@ -73,14 +74,17 @@ function App() {
   const handleSlotClick = async (type, slotNum) => {
     const occupant = members.find(m => m.type === type && m.team_slot === slotNum);
     
+    // Nếu là Admin và đang có người được chọn để di chuyển/hoán đổi
     if (isAdmin && movingMember) {
       if (occupant) {
+        // Lệnh HOÁN ĐỔI (Swap): Đổi vị trí giữa movingMember và occupant
         const updates = [
           supabase.from('register_list').update({ type: occupant.type, team_slot: occupant.team_slot }).eq('id', movingMember.id),
           supabase.from('register_list').update({ type: movingMember.type, team_slot: movingMember.team_slot }).eq('id', occupant.id)
         ];
         await Promise.all(updates);
       } else {
+        // Lệnh DI CHUYỂN: Chuyển đến ô trống
         await supabase.from('register_list').update({ type, team_slot: slotNum }).eq('id', movingMember.id);
       }
       setMovingMember(null);
@@ -90,7 +94,7 @@ function App() {
 
     if (occupant) {
       setSelectedMember(occupant);
-      if (isAdmin) setMovingMember(occupant);
+      if (isAdmin) setMovingMember(occupant); // Admin chạm lần 1 để chọn người cần Swap
       return;
     }
 
@@ -132,6 +136,7 @@ function App() {
     const isSelected = form.type === type && form.team_slot === slotNum;
     const isBeingMoved = movingMember && movingMember.id === occupant?.id;
     
+    // Kiểm tra nếu là Trưởng nhóm (số đầu tiên của mỗi tổ đội 6 người)
     const isLeaderSlot = type === 'Chính thức' && (slotNum - 1) % 6 === 0;
 
     return (
@@ -141,7 +146,7 @@ function App() {
           backgroundColor: occupant ? classInfo[occupant.class_name]?.color : '#161616',
           border: isBeingMoved ? '2px solid white' : isSelected ? '2px solid gold' : '1px solid #333',
           display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
-          fontSize: '10px', color: 'white', fontWeight: 'bold', animation: isBeingMoved ? 'pulse 1s infinite' : 'none'
+          fontSize: '10px', color: occupant?.class_name === 'Long Ngâm' ? '#000' : 'white', fontWeight: 'bold', animation: isBeingMoved ? 'pulse 1s infinite' : 'none'
         }}
       >
         {isLeaderSlot && <span style={{ position: 'absolute', top: '1px', left: '2px', fontSize: '8px', opacity: 0.8 }}>🔑</span>}
@@ -163,6 +168,7 @@ function App() {
         @media (min-width: 1024px) { .team-grid { grid-template-columns: repeat(10, 1fr); } }
       `}</style>
 
+      {/* ADMIN CONTROLS */}
       <div style={{ position: 'absolute', top: '10px', right: '10px', display: 'flex', flexDirection: 'column', gap: '5px', alignItems: 'flex-end', zIndex: 100 }}>
         <button onClick={handleAdminLogin} style={{ background: isAdmin ? '#d4af37' : 'transparent', color: isAdmin ? '#000' : '#d4af37', border: '1px solid #d4af37', padding: '5px 10px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>
           {isAdmin ? "ADMIN: ON" : "ADMIN LOGIN"}
@@ -182,6 +188,24 @@ function App() {
       <img src="/nth-logo.png" alt="Logo" style={{ width: '60px', margin: '0 auto', display: 'block' }} />
       <h1 style={{ color: 'gold', fontSize: '20px', margin: '10px 0' }}>BANG QUỶ MÔN QUAN</h1>
 
+      {selectedMember && (
+        <div style={{ position: 'fixed', bottom: '20px', left: '50%', transform: 'translateX(-50%)', background: '#1a1a1a', padding: '15px', borderRadius: '10px', border: '2px solid gold', zIndex: 1000, width: '90%', maxWidth: '400px', boxShadow: '0 0 20px rgba(0,0,0,0.8)' }}>
+          <div style={{ marginBottom: '10px', fontWeight: 'bold', color: 'gold' }}>{selectedMember.char_name} ({selectedMember.class_name})</div>
+          <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+            {(isAdmin || selectedMember.char_name === localStorage.getItem('my_char_name')) && (
+              <>
+                <button onClick={toggleItem} style={{ flex: 1, background: selectedMember.has_item ? '#444' : '#28a745', color: 'white', border: 'none', padding: '10px', borderRadius: '4px', fontWeight: 'bold' }}>
+                  {selectedMember.has_item ? "BỎ VẬT TƯ" : "MANG VẬT TƯ 📦"}
+                </button>
+                <button onClick={deleteMember} style={{ flex: 1, background: '#dc3545', color: 'white', border: 'none', padding: '10px', borderRadius: '4px', fontWeight: 'bold' }}>XÓA</button>
+              </>
+            )}
+            <button onClick={() => setSelectedMember(null)} style={{ background: '#333', color: 'white', border: 'none', padding: '10px', borderRadius: '4px' }}>ĐÓNG</button>
+          </div>
+        </div>
+      )}
+
+      {/* QUÂN SỐ */}
       <div style={{ display: 'flex', justifyContent: 'center', gap: '5px', background: '#0a0a0a', padding: '10px', borderRadius: '8px', border: '1px solid #222', marginBottom: '15px', flexWrap: 'wrap' }}>
         {Object.keys(classInfo).map(cls => (
           <div key={cls} style={{ borderRight: '1px solid #222', paddingRight: '5px', minWidth: '60px' }}>
@@ -190,6 +214,11 @@ function App() {
           </div>
         ))}
         
+        <div style={{ paddingLeft: '8px', paddingRight: '8px', borderLeft: '2px solid #333' }}>
+          <div style={{ fontSize: '10px', fontWeight: 'bold', color: '#aaa' }}>📦 VẬT TƯ</div>
+          <div style={{ fontSize: '14px', color: 'gold' }}>{members.filter(m => m.has_item).length}</div>
+        </div>
+
         <div style={{ paddingLeft: '8px', borderLeft: '2px solid #333' }}>
           <div style={{ fontSize: '10px', fontWeight: 'bold', color: '#00FF00' }}>QUÂN SỐ CHÍNH</div>
           <div style={{ fontSize: '14px', color: '#00FF00' }}>{officialCount} / 60</div>
@@ -205,6 +234,13 @@ function App() {
           ĐĂNG KÝ {form.team_slot ? `(S${form.team_slot})` : ''}
         </button>
       </form>
+
+      {isAdmin && movingMember && (
+        <div style={{ color: 'gold', marginBottom: '10px', fontSize: '12px', fontWeight: 'bold', background: '#222', padding: '5px', display: 'inline-block', borderRadius: '4px' }}>
+          ĐANG CHỌN: [ {movingMember.char_name} ] <br/>
+          Chạm ô TRỐNG để dời | Chạm người KHÁC để HOÁN ĐỔI | Chạm lại chính mình để hủy
+        </div>
+      )}
 
       <h2 style={{ color: 'gold', fontSize: '15px', marginBottom: '10px' }}>ĐỘI HÌNH CHÍNH THỨC (60)</h2>
       <div className="team-grid">
