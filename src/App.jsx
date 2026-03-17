@@ -16,12 +16,12 @@ const classInfo = {
   'Long Ngâm': { color: '#66FFFF' },
 };
 
-// Cấu hình màu sắc cho từng Nhóm
+// Cấu hình màu sắc rực rỡ cho từng Nhóm
 const groupSettings = {
-  'Nhóm 1': { bg: 'rgba(255, 255, 255, 0.08)', border: '#fff' },
-  'Nhóm 2': { bg: 'rgba(0, 255, 255, 0.15)', border: '#0ff' },
-  'Nhóm 3': { bg: 'rgba(255, 215, 0, 0.15)', border: '#ffd700' },
-  'Nhóm 4': { bg: 'rgba(255, 0, 255, 0.15)', border: '#f0f' },
+  'Nhóm 1': { bg: 'rgba(255, 255, 255, 0.05)', border: '#444', label: '#aaa' },
+  'Nhóm 2': { bg: 'rgba(0, 255, 255, 0.12)', border: '#00ffff', label: '#00ffff' },
+  'Nhóm 3': { bg: 'rgba(255, 215, 0, 0.12)', border: '#ffd700', label: '#ffd700' },
+  'Nhóm 4': { bg: 'rgba(255, 69, 0, 0.15)', border: '#ff4500', label: '#ff4500' },
 };
 
 function App() {
@@ -144,7 +144,7 @@ function App() {
       <div key={`${type}-${slotNum}`} onClick={() => handleSlotClick(type, slotNum)}
         style={{
           height: '42px', margin: '3px 0', borderRadius: '4px', position: 'relative',
-          backgroundColor: occupant ? classInfo[occupant.class_name]?.color : '#161616',
+          backgroundColor: occupant ? classInfo[occupant.class_name]?.color : '#111',
           border: isBeingMoved ? '2px solid white' : isSelected ? '2px solid gold' : '1px solid #333',
           display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
           fontSize: '10px', color: occupant?.class_name === 'Long Ngâm' ? '#000' : 'white', fontWeight: 'bold', animation: isBeingMoved ? 'pulse 1s infinite' : 'none'
@@ -153,7 +153,7 @@ function App() {
         {isLeaderSlot && <span style={{ position: 'absolute', top: '1px', left: '2px', fontSize: '8px', opacity: 0.8 }}>🔑</span>}
         {occupant ? (
           <>
-            <span style={{ textAlign: 'center', padding: '0 2px' }}>{occupant.char_name}</span>
+            <span style={{ textAlign: 'center', padding: '0 2px' }}>{occupant.char_name.substring(0, 8)}</span>
             {occupant.has_item && <span style={{ position: 'absolute', top: '1px', right: '2px' }}>📦</span>}
           </>
         ) : `S${slotNum}`}
@@ -165,9 +165,10 @@ function App() {
     <div style={{ backgroundColor: '#000', color: 'white', minHeight: '100vh', padding: '15px', textAlign: 'center', fontFamily: 'Arial' }}>
       <style>{`
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
-        .team-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; max-width: 1200px; margin: 0 auto; }
+        .team-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; max-width: 1200px; margin: 0 auto; }
         @media (min-width: 1024px) { .team-grid { grid-template-columns: repeat(10, 1fr); } }
-        .group-select { width: 100%; background: #222; color: #fff; border: 1px solid #444; font-size: 9px; border-radius: 3px; cursor: pointer; margin-top: 4px; padding: 2px; }
+        .group-select { width: 100%; background: #000; color: #fff; border: 1px solid #444; font-size: 10px; border-radius: 3px; cursor: pointer; margin-top: 5px; padding: 3px; font-weight: bold; appearance: none; text-align: center; }
+        .group-select:disabled { cursor: default; border-style: dashed; color: #fff; opacity: 1; }
       `}</style>
 
       {/* ADMIN CONTROLS */}
@@ -190,24 +191,7 @@ function App() {
       <img src="/nth-logo.png" alt="Logo" style={{ width: '60px', margin: '0 auto', display: 'block' }} />
       <h1 style={{ color: 'gold', fontSize: '20px', margin: '10px 0' }}>BANG QUỶ MÔN QUAN</h1>
 
-      {selectedMember && (
-        <div style={{ position: 'fixed', bottom: '20px', left: '50%', transform: 'translateX(-50%)', background: '#1a1a1a', padding: '15px', borderRadius: '10px', border: '2px solid gold', zIndex: 1000, width: '90%', maxWidth: '400px', boxShadow: '0 0 20px rgba(0,0,0,0.8)' }}>
-          <div style={{ marginBottom: '10px', fontWeight: 'bold', color: 'gold' }}>{selectedMember.char_name} ({selectedMember.class_name})</div>
-          <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
-            {(isAdmin || selectedMember.char_name === localStorage.getItem('my_char_name')) && (
-              <>
-                <button onClick={toggleItem} style={{ flex: 1, background: selectedMember.has_item ? '#444' : '#28a745', color: 'white', border: 'none', padding: '10px', borderRadius: '4px', fontWeight: 'bold' }}>
-                  {selectedMember.has_item ? "BỎ VẬT TƯ" : "MANG VẬT TƯ 📦"}
-                </button>
-                <button onClick={deleteMember} style={{ flex: 1, background: '#dc3545', color: 'white', border: 'none', padding: '10px', borderRadius: '4px', fontWeight: 'bold' }}>XÓA</button>
-              </>
-            )}
-            <button onClick={() => setSelectedMember(null)} style={{ background: '#333', color: 'white', border: 'none', padding: '10px', borderRadius: '4px' }}>ĐÓNG</button>
-          </div>
-        </div>
-      )}
-
-      {/* QUÂN SỐ */}
+      {/* QUÂN SỐ TỔNG HỢP */}
       <div style={{ display: 'flex', justifyContent: 'center', gap: '5px', background: '#0a0a0a', padding: '10px', borderRadius: '8px', border: '1px solid #222', marginBottom: '15px', flexWrap: 'wrap' }}>
         {Object.keys(classInfo).map(cls => (
           <div key={cls} style={{ borderRight: '1px solid #222', paddingRight: '5px', minWidth: '60px' }}>
@@ -215,18 +199,14 @@ function App() {
             <div style={{ fontSize: '14px' }}>{members.filter(m => m.class_name === cls).length}</div>
           </div>
         ))}
-        <div style={{ paddingLeft: '8px', paddingRight: '8px', borderLeft: '2px solid #333' }}>
-          <div style={{ fontSize: '10px', fontWeight: 'bold', color: '#aaa' }}>📦 VẬT TƯ</div>
-          <div style={{ fontSize: '14px', color: 'gold' }}>{members.filter(m => m.has_item).length}</div>
-        </div>
         <div style={{ paddingLeft: '8px', borderLeft: '2px solid #333' }}>
-          <div style={{ fontSize: '10px', fontWeight: 'bold', color: '#00FF00' }}>QUÂN SỐ CHÍNH</div>
+          <div style={{ fontSize: '10px', fontWeight: 'bold', color: '#00FF00' }}>QUÂN SỐ</div>
           <div style={{ fontSize: '14px', color: '#00FF00' }}>{officialCount} / 60</div>
         </div>
       </div>
       
       <form onSubmit={handleSubmit} style={{ marginBottom: '25px' }}>
-        <input style={{ padding: '10px', background: '#111', color: 'white', border: '1px solid #333', borderRadius: '4px', width: '160px' }} placeholder="Tên nhân vật..." value={form.char_name} onChange={e => setForm({...form, char_name: e.target.value})} required />
+        <input style={{ padding: '10px', background: '#111', color: 'white', border: '1px solid #333', borderRadius: '4px', width: '160px' }} placeholder="Tên..." value={form.char_name} onChange={e => setForm({...form, char_name: e.target.value})} required />
         <select style={{ padding: '10px', background: '#111', color: 'white', border: '1px solid #333', margin: '0 5px', borderRadius: '4px' }} value={form.class_name} onChange={e => setForm({...form, class_name: e.target.value})}>
           {Object.keys(classInfo).map(c => <option key={c} value={c}>{c}</option>)}
         </select>
@@ -235,31 +215,28 @@ function App() {
         </button>
       </form>
 
-      {isAdmin && movingMember && (
-        <div style={{ color: 'gold', marginBottom: '10px', fontSize: '12px', fontWeight: 'bold', background: '#222', padding: '5px', display: 'inline-block', borderRadius: '4px' }}>
-          ĐANG CHỌN: [ {movingMember.char_name} ] <br/>
-          Chạm ô TRỐNG để dời | Chạm người KHÁC để HOÁN ĐỔI | Chạm lại chính mình để hủy
-        </div>
-      )}
-
       <h2 style={{ color: 'gold', fontSize: '15px', marginBottom: '10px' }}>ĐỘI HÌNH CHÍNH THỨC (60)</h2>
       <div className="team-grid">
         {[...Array(10)].map((_, col) => {
           const teamNum = col + 1;
           const currentGroup = teamGroups[teamNum];
+          const settings = groupSettings[currentGroup];
           return (
             <div key={col} style={{ 
-              background: groupSettings[currentGroup].bg, 
-              padding: '6px', 
-              borderRadius: '6px', 
-              border: `1px solid ${groupSettings[currentGroup].border}`,
-              transition: 'all 0.3s ease'
+              background: settings.bg, 
+              padding: '8px', 
+              borderRadius: '8px', 
+              border: `2px solid ${settings.border}`,
+              transition: 'all 0.3s ease',
+              boxShadow: currentGroup !== 'Nhóm 1' ? `0 0 10px ${settings.border}33` : 'none'
             }}>
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '4px' }}>
-                <span style={{ color: 'gold', fontSize: '10px', fontWeight: 'bold' }}>TEAM {teamNum}</span>
+              <div style={{ marginBottom: '6px' }}>
+                <span style={{ color: settings.label, fontSize: '11px', fontWeight: 'bold' }}>TEAM {teamNum}</span>
                 <select 
                   className="group-select"
+                  style={{ borderColor: settings.border }}
                   value={currentGroup}
+                  disabled={!isAdmin} // CHỈ ADMIN MỚI ĐƯỢC CHỈNH
                   onChange={(e) => setTeamGroups({...teamGroups, [teamNum]: e.target.value})}
                 >
                   {Object.keys(groupSettings).map(g => <option key={g} value={g}>{g}</option>)}
@@ -271,20 +248,27 @@ function App() {
         })}
       </div>
 
-      <h2 style={{ color: '#87CEEB', fontSize: '15px', margin: '20px 0 10px 0' }}>DỰ BỊ / HỌC VIỆC (30)</h2>
+      <h2 style={{ color: '#87CEEB', fontSize: '15px', margin: '30px 0 10px 0' }}>DỰ BỊ / HỌC VIỆC (30)</h2>
       <div className="team-grid">
         {[...Array(30)].map((_, i) => renderSlotCell('Học việc', i + 1))}
       </div>
 
-      <footer style={{ marginTop: '50px', padding: '20px', borderTop: '1px solid #222', maxWidth: '800px', margin: '50px auto 0 auto' }}>
-        <p style={{ fontSize: '11px', color: '#888', lineHeight: '1.6', textAlign: 'center' }}>
-          <strong style={{ color: '#aaa' }}>Lưu ý:</strong> Mỗi thiết bị chỉ đăng ký được 1 ô.
-          <br />
-          <span style={{ display: 'block', marginTop: '8px', fontSize: '12px' }}>
-            Mọi vấn đề liên hệ <strong style={{ color: '#d4af37' }}>VôẢnhNhân (Zalo: Khoa)</strong>
-          </span>
-        </p>
-      </footer>
+      {selectedMember && (
+        <div style={{ position: 'fixed', bottom: '20px', left: '50%', transform: 'translateX(-50%)', background: '#1a1a1a', padding: '15px', borderRadius: '10px', border: '2px solid gold', zIndex: 1000, width: '90%', maxWidth: '400px' }}>
+          <div style={{ marginBottom: '10px', fontWeight: 'bold', color: 'gold' }}>{selectedMember.char_name}</div>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            {(isAdmin || selectedMember.char_name === localStorage.getItem('my_char_name')) && (
+              <>
+                <button onClick={toggleItem} style={{ flex: 1, background: selectedMember.has_item ? '#444' : '#28a745', color: 'white', border: 'none', padding: '10px', borderRadius: '4px' }}>
+                  {selectedMember.has_item ? "BỎ VẬT TƯ" : "VẬT TƯ 📦"}
+                </button>
+                <button onClick={deleteMember} style={{ flex: 1, background: '#dc3545', color: 'white', border: 'none', padding: '10px', borderRadius: '4px' }}>XÓA</button>
+              </>
+            )}
+            <button onClick={() => setSelectedMember(null)} style={{ background: '#333', color: 'white', border: 'none', padding: '10px', borderRadius: '4px' }}>ĐÓNG</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
