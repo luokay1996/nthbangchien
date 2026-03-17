@@ -1,267 +1,545 @@
 import React, { useEffect, useState, useCallback } from 'react';
+
 import { createClient } from '@supabase/supabase-js';
 
-// Khởi tạo Supabase
+
+
 const supabase = createClient(
+
   import.meta.env.VITE_SUPABASE_URL,
+
   import.meta.env.VITE_SUPABASE_ANON_KEY
+
 );
 
-// Cấu hình màu sắc Hệ phái
+
+
 const classInfo = {
+
   'Toái Mộng': { color: '#87CEEB' },
+
   'Thiết Y': { color: '#FFA500' },
+
   'Huyết Hà': { color: '#8B0000' },
+
   'Thần Tương': { color: '#4169e1ff' }, 
+
   'Tố Vấn': { color: '#FF69B4' },
+
   'Cửu Linh': { color: '#800080' },
-  'Long Ngâm': { color: '#66FFFF' },
+
+  'Long Ngâm': { color: '#66FFFF' }, // Đã thêm Class mới tại đây
+
 };
 
-// Màu nền nhẹ cho các nhóm (G1, G2, G3...)
-const groupBgs = [
-  'rgba(255, 255, 255, 0.05)', // Nhóm 1
-  'rgba(0, 255, 255, 0.12)',   // Nhóm 2
-  'rgba(255, 215, 0, 0.12)',   // Nhóm 3
-  'rgba(255, 69, 0, 0.15)',    // Nhóm 4
-  'rgba(154, 205, 50, 0.15)',  // Nhóm 5
-  'rgba(255, 0, 255, 0.12)',   // Nhóm 6
-];
+
 
 function App() {
+
   const [members, setMembers] = useState([]);
+
   const [isAdmin, setIsAdmin] = useState(false);
+
   const [isLimitEnabled, setIsLimitEnabled] = useState(true);
+
   const [movingMember, setMovingMember] = useState(null);
+
   const [selectedMember, setSelectedMember] = useState(null);
+
   const [form, setForm] = useState({ char_name: '', class_name: 'Toái Mộng', team_slot: null, type: 'Chính thức' });
 
-  // State Chia Nhóm
-  const [groupStops, setGroupStops] = useState([]); // Lưu các điểm cắt Team
 
-  // State Map
-  const [teamPositions, setTeamPositions] = useState([]);
-  const [selectedTeamToMove, setSelectedTeamToMove] = useState(null);
 
-  // Lấy dữ liệu từ Supabase
-  const fetchData = useCallback(async () => {
-    const { data: mems } = await supabase.from('register_list').select('*');
-    const { data: pos } = await supabase.from('team_positions').select('*');
-    if (mems) setMembers(mems);
-    if (pos) setTeamPositions(pos);
+  const fetchMembers = useCallback(async () => {
+
+    const { data, error } = await supabase.from('register_list').select('*');
+
+    if (!error) setMembers(data || []);
+
   }, []);
 
+
+
   useEffect(() => {
-    fetchData();
-    const channel = supabase.channel('db-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'register_list' }, fetchData)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'team_positions' }, fetchData)
+
+    fetchMembers();
+
+    const channel = supabase.channel('schema-db-changes')
+
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'register_list' }, () => fetchMembers())
+
       .subscribe();
+
     return () => supabase.removeChannel(channel);
-  }, [fetchData]);
+
+  }, [fetchMembers]);
+
+
+
+  // CHỈ ĐẾM THÀNH VIÊN CHÍNH THỨC (Không đếm dự bị)
 
   const officialCount = members.filter(m => m.char_name && m.type === 'Chính thức').length;
 
-  // Xác định Team thuộc nhóm nào
-  const getGroupIdx = (teamIdx) => {
-    const teamNum = teamIdx + 1;
-    let idx = 0;
-    const sortedStops = [...groupStops].sort((a, b) => a - b);
-    for (let stop of sortedStops) {
-      if (teamNum > stop) idx++;
-    }
-    return idx;
-  };
 
-  // Xử lý di chuyển Team trên Map
-  const handleMapClick = async (e) => {
-    if (!isAdmin || selectedTeamToMove === null) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width) * 100;
-    const y = ((e.clientY - rect.top) / rect.height) * 100;
-
-    const { error } = await supabase
-      .from('team_positions')
-      .update({ pos_x: x, pos_y: y })
-      .eq('team_id', selectedTeamToMove);
-
-    if (!error) setSelectedTeamToMove(null);
-  };
 
   const handleAdminLogin = () => {
+
     const pass = prompt("Nhập mật mã Admin:");
-    if (pass === "quymonquan2026") setIsAdmin(true);
-    else alert("Sai mật mã!");
+
+    if (pass === "quymonquan2026") { 
+
+      setIsAdmin(true); 
+
+      alert("ĐÃ KÍCH HOẠT QUYỀN ADMIN!"); 
+
+    } else { 
+
+      alert("Sai mật mã!"); 
+
+    }
+
   };
+
+
+
+  const handleResetBoard = async () => {
+
+    if (window.confirm("CẢNH BÁO: Xóa sạch toàn bộ danh sách tuần này?")) {
+
+      const { error } = await supabase.from('register_list').delete().neq('id', 0);
+
+      if (!error) {
+
+        alert("Đã reset bảng thành công!");
+
+        fetchMembers();
+
+      }
+
+    }
+
+  };
+
+
+
+  const toggleItem = async () => {
+
+    if (!selectedMember) return;
+
+    const newStatus = !selectedMember.has_item;
+
+    const { error } = await supabase.from('register_list').update({ has_item: newStatus }).eq('id', selectedMember.id);
+
+    
+
+    if (!error) {
+
+      setMembers(prev => prev.map(m => m.id === selectedMember.id ? { ...m, has_item: newStatus } : m));
+
+      setSelectedMember(null);
+
+    }
+
+  };
+
+
 
   const handleSlotClick = async (type, slotNum) => {
+
     const occupant = members.find(m => m.type === type && m.team_slot === slotNum);
+
     
+
+    // Nếu là Admin và đang có người được chọn để di chuyển/hoán đổi
+
     if (isAdmin && movingMember) {
+
       if (occupant) {
-        await Promise.all([
+
+        // Lệnh HOÁN ĐỔI (Swap): Đổi vị trí giữa movingMember và occupant
+
+        const updates = [
+
           supabase.from('register_list').update({ type: occupant.type, team_slot: occupant.team_slot }).eq('id', movingMember.id),
+
           supabase.from('register_list').update({ type: movingMember.type, team_slot: movingMember.team_slot }).eq('id', occupant.id)
-        ]);
+
+        ];
+
+        await Promise.all(updates);
+
       } else {
+
+        // Lệnh DI CHUYỂN: Chuyển đến ô trống
+
         await supabase.from('register_list').update({ type, team_slot: slotNum }).eq('id', movingMember.id);
+
       }
+
       setMovingMember(null);
-      fetchData();
+
+      fetchMembers();
+
       return;
+
     }
+
+
 
     if (occupant) {
+
       setSelectedMember(occupant);
-      if (isAdmin) setMovingMember(occupant);
+
+      if (isAdmin) setMovingMember(occupant); // Admin chạm lần 1 để chọn người cần Swap
+
       return;
+
     }
+
+
 
     setForm({ ...form, type, team_slot: slotNum });
+
     setSelectedMember(null);
+
   };
+
+
 
   const handleSubmit = async (e) => {
+
     e.preventDefault();
-    if (!form.team_slot) return alert("Hãy chọn ô!");
-    const { error } = await supabase.from('register_list').insert([form]);
-    if (!error) {
-      setForm({ ...form, char_name: '', team_slot: null });
-      fetchData();
+
+    if (!form.team_slot) return alert("Vui lòng chọn ô Slot!");
+
+    const savedName = localStorage.getItem('my_char_name');
+
+    
+
+    if (!isAdmin && isLimitEnabled && savedName && members.some(m => m.char_name === savedName)) {
+
+      return alert(`Bạn đã đăng ký nhân vật [${savedName}]. Mỗi người chỉ được 1 ô!`);
+
     }
+
+
+
+    const { error } = await supabase.from('register_list').insert([form]);
+
+    if (!error) {
+
+      localStorage.setItem('my_char_name', form.char_name);
+
+      setForm({ ...form, char_name: '', team_slot: null });
+
+      fetchMembers();
+
+    }
+
   };
+
+
+
+  const deleteMember = async () => {
+
+    if (!selectedMember) return;
+
+    if (window.confirm(`Xác nhận xóa [${selectedMember.char_name}]?`)) {
+
+      const { error } = await supabase.from('register_list').delete().eq('id', selectedMember.id);
+
+      if (!error) {
+
+        if (selectedMember.char_name === localStorage.getItem('my_char_name')) localStorage.removeItem('my_char_name');
+
+        setSelectedMember(null);
+
+        fetchMembers();
+
+      }
+
+    }
+
+  };
+
+
 
   const renderSlotCell = (type, slotNum) => {
+
     const occupant = members.find(m => m.type === type && m.team_slot === slotNum);
+
     const isSelected = form.type === type && form.team_slot === slotNum;
-    const isLeader = type === 'Chính thức' && (slotNum - 1) % 6 === 0;
+
+    const isBeingMoved = movingMember && movingMember.id === occupant?.id;
+
+    
+
+    // Kiểm tra nếu là Trưởng nhóm (số đầu tiên của mỗi tổ đội 6 người)
+
+    const isLeaderSlot = type === 'Chính thức' && (slotNum - 1) % 6 === 0;
+
+
 
     return (
+
       <div key={`${type}-${slotNum}`} onClick={() => handleSlotClick(type, slotNum)}
+
         style={{
-          height: '40px', margin: '3px 0', borderRadius: '4px', position: 'relative',
-          backgroundColor: occupant ? classInfo[occupant.class_name]?.color : '#111',
-          border: isSelected ? '2px solid gold' : '1px solid #333',
+
+          height: '42px', margin: '3px 0', borderRadius: '4px', position: 'relative',
+
+          backgroundColor: occupant ? classInfo[occupant.class_name]?.color : '#161616',
+
+          border: isBeingMoved ? '2px solid white' : isSelected ? '2px solid gold' : '1px solid #333',
+
           display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
-          fontSize: '10px', color: occupant?.class_name === 'Long Ngâm' ? '#000' : 'white', fontWeight: 'bold'
+
+          fontSize: '10px', color: occupant?.class_name === 'Long Ngâm' ? '#000' : 'white', fontWeight: 'bold', animation: isBeingMoved ? 'pulse 1s infinite' : 'none'
+
         }}
+
       >
-        {isLeader && <span style={{ position: 'absolute', top: '1px', left: '2px', fontSize: '8px' }}>🔑</span>}
+
+        {isLeaderSlot && <span style={{ position: 'absolute', top: '1px', left: '2px', fontSize: '8px', opacity: 0.8 }}>🔑</span>}
+
         {occupant ? (
+
           <>
-            <span style={{ textAlign: 'center' }}>{occupant.char_name.substring(0, 8)}</span>
+
+            <span style={{ textAlign: 'center', padding: '0 2px' }}>{occupant.char_name}</span>
+
             {occupant.has_item && <span style={{ position: 'absolute', top: '1px', right: '2px' }}>📦</span>}
+
           </>
+
         ) : `S${slotNum}`}
+
       </div>
+
     );
+
   };
 
+
+
   return (
+
     <div style={{ backgroundColor: '#000', color: 'white', minHeight: '100vh', padding: '15px', textAlign: 'center', fontFamily: 'Arial' }}>
+
       <style>{`
-        .map-container { width: 100%; max-width: 900px; height: 450px; margin: 0 auto 20px; border: 2px solid #333; position: relative; background: url('https://i.imgur.com/GndYVvR.png') center/cover; border-radius: 12px; overflow: hidden; }
-        .team-marker { position: absolute; width: 30px; height: 30px; background: gold; color: black; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; transform: translate(-50%, -50%); cursor: pointer; border: 2px solid white; box-shadow: 0 0 10px gold; z-index: 10; }
-        .team-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; max-width: 1200px; margin: 0 auto; }
+
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+
+        .team-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; max-width: 1200px; margin: 0 auto; }
+
         @media (min-width: 1024px) { .team-grid { grid-template-columns: repeat(10, 1fr); } }
-        .group-slider { width: 100%; max-width: 500px; direction: rtl; cursor: pointer; accent-color: gold; height: 12px; }
+
       `}</style>
 
-      {/* ADMIN PANEL */}
-      <div style={{ position: 'fixed', top: '10px', right: '10px', zIndex: 100 }}>
-        <button onClick={handleAdminLogin} style={{ background: isAdmin ? 'gold' : '#222', color: isAdmin ? '#000' : 'gold', border: '1px solid gold', padding: '5px 10px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>
+
+
+      {/* ADMIN CONTROLS */}
+
+      <div style={{ position: 'absolute', top: '10px', right: '10px', display: 'flex', flexDirection: 'column', gap: '5px', alignItems: 'flex-end', zIndex: 100 }}>
+
+        <button onClick={handleAdminLogin} style={{ background: isAdmin ? '#d4af37' : 'transparent', color: isAdmin ? '#000' : '#d4af37', border: '1px solid #d4af37', padding: '5px 10px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>
+
           {isAdmin ? "ADMIN: ON" : "ADMIN LOGIN"}
+
         </button>
+
+        {isAdmin && (
+
+          <>
+
+            <button onClick={() => setIsLimitEnabled(!isLimitEnabled)} style={{ background: isLimitEnabled ? '#222' : 'red', color: 'white', border: '1px solid #444', padding: '5px 10px', borderRadius: '4px', fontSize: '10px' }}>
+
+              GIỚI HẠN: {isLimitEnabled ? "BẬT" : "TẮT"}
+
+            </button>
+
+            <button onClick={handleResetBoard} style={{ background: 'blue', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>
+
+              RESET TUẦN MỚI
+
+            </button>
+
+          </>
+
+        )}
+
       </div>
 
-      <h1 style={{ color: 'gold', fontSize: '24px', margin: '10px 0' }}>QUỶ MÔN QUAN - CHIẾN THUẬT</h1>
 
-      {/* INTERACTIVE MAP */}
-      <div className="map-container" onClick={handleMapClick}>
-        {teamPositions.map(tp => (
-          <div key={tp.team_id} className="team-marker" 
-            style={{ left: `${tp.pos_x}%`, top: `${tp.pos_y}%`, outline: selectedTeamToMove === tp.team_id ? '4px solid red' : 'none' }}
-            onClick={(e) => { e.stopPropagation(); if(isAdmin) setSelectedTeamToMove(tp.team_id); }}>
-            {tp.team_id}
-          </div>
-        ))}
-      </div>
 
-      {/* THANH TRƯỢT CHIA NHÓM */}
-      <div style={{ background: '#111', padding: '15px', borderRadius: '12px', margin: '20px auto', maxWidth: '700px', border: '1px solid #222' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'gold', marginBottom: '10px' }}>
-          <span>T1</span>
-          <span><b>KÉO TỪ PHẢI SANG TRÁI ĐỂ CHIA NHÓM</b></span>
-          <span>T10</span>
-        </div>
-        <input 
-          type="range" min="1" max="10" step="1" className="group-slider"
-          onChange={(e) => {
-            const val = parseInt(e.target.value);
-            if (val === 10) return;
-            setGroupStops(prev => [...new Set([...prev, val])].sort((a,b) => a - b));
-          }}
-        />
-        <div style={{ marginTop: '10px' }}>
-          <button onClick={() => setGroupStops([])} style={{ background: '#333', color: 'white', border: 'none', padding: '6px 20px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>RESET CHIA NHÓM</button>
-        </div>
-        {groupStops.length > 0 && <div style={{ color: '#888', fontSize: '11px', marginTop: '5px' }}>Điểm cắt tại Team: {groupStops.join(', ')}</div>}
-      </div>
+      <img src="/nth-logo.png" alt="Logo" style={{ width: '60px', margin: '0 auto', display: 'block' }} />
 
-      {/* GRID ĐỘI HÌNH CHÍNH */}
-      <div className="team-grid">
-        {[...Array(10)].map((_, col) => {
-          const gIdx = getGroupIdx(col);
-          return (
-            <div key={col} style={{ 
-              background: groupBgs[gIdx % groupBgs.length], 
-              padding: '8px', borderRadius: '8px', border: '1px solid rgba(255,215,0,0.1)'
-            }}>
-              <div style={{ color: 'gold', fontSize: '10px', fontWeight: 'bold', marginBottom: '5px' }}>T{col + 1} <small style={{color: '#666'}}>(G{gIdx + 1})</small></div>
-              {[...Array(6)].map((_, row) => renderSlotCell('Chính thức', col * 6 + row + 1))}
-            </div>
-          );
-        })}
-      </div>
+      <h1 style={{ color: 'gold', fontSize: '20px', margin: '10px 0' }}>BANG QUỶ MÔN QUAN</h1>
 
-      {/* FORM ĐĂNG KÝ */}
-      <div style={{ margin: '30px 0' }}>
-        <form onSubmit={handleSubmit}>
-          <input style={{ padding: '10px', background: '#111', color: 'white', border: '1px solid #333', borderRadius: '4px' }} placeholder="Tên nhân vật..." value={form.char_name} onChange={e => setForm({...form, char_name: e.target.value})} required />
-          <select style={{ padding: '10px', background: '#111', color: 'white', border: '1px solid #333', margin: '0 5px', borderRadius: '4px' }} value={form.class_name} onChange={e => setForm({...form, class_name: e.target.value})}>
-            {Object.keys(classInfo).map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
-          <button type="submit" style={{ padding: '10px 20px', background: 'gold', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' }}>
-            ĐĂNG KÝ {form.team_slot ? `(S${form.team_slot})` : ''}
-          </button>
-        </form>
-      </div>
 
-      {/* DỰ BỊ */}
-      <h2 style={{ color: '#87CEEB', fontSize: '18px', margin: '40px 0 15px' }}>DỰ BỊ / HỌC VIỆC (30)</h2>
-      <div className="team-grid">
-        {[...Array(30)].map((_, i) => renderSlotCell('Học việc', i + 1))}
-      </div>
 
-      {/* POPUP THÀNH VIÊN */}
       {selectedMember && (
-        <div style={{ position: 'fixed', bottom: '20px', left: '50%', transform: 'translateX(-50%)', background: '#1a1a1a', padding: '20px', borderRadius: '12px', border: '2px solid gold', zIndex: 1000, width: '90%', maxWidth: '400px' }}>
-          <div style={{ marginBottom: '15px', fontWeight: 'bold', color: 'gold' }}>{selectedMember.char_name} ({selectedMember.class_name})</div>
-          <div style={{ display: 'flex', gap: '10px' }}>
-            <button onClick={async () => {
-              await supabase.from('register_list').update({ has_item: !selectedMember.has_item }).eq('id', selectedMember.id);
-              setSelectedMember(null); fetchData();
-            }} style={{ flex: 1, background: '#28a745', color: 'white', border: 'none', padding: '10px', borderRadius: '4px', fontWeight: 'bold' }}>📦 VẬT TƯ</button>
-            <button onClick={async () => {
-              if(window.confirm("Xóa thành viên này?")) await supabase.from('register_list').delete().eq('id', selectedMember.id);
-              setSelectedMember(null); fetchData();
-            }} style={{ flex: 1, background: '#dc3545', color: 'white', border: 'none', padding: '10px', borderRadius: '4px', fontWeight: 'bold' }}>XÓA</button>
-            <button onClick={() => setSelectedMember(null)} style={{ flex: 1, background: '#444', color: 'white', border: 'none', padding: '10px', borderRadius: '4px' }}>ĐÓNG</button>
+
+        <div style={{ position: 'fixed', bottom: '20px', left: '50%', transform: 'translateX(-50%)', background: '#1a1a1a', padding: '15px', borderRadius: '10px', border: '2px solid gold', zIndex: 1000, width: '90%', maxWidth: '400px', boxShadow: '0 0 20px rgba(0,0,0,0.8)' }}>
+
+          <div style={{ marginBottom: '10px', fontWeight: 'bold', color: 'gold' }}>{selectedMember.char_name} ({selectedMember.class_name})</div>
+
+          <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+
+            {(isAdmin || selectedMember.char_name === localStorage.getItem('my_char_name')) && (
+
+              <>
+
+                <button onClick={toggleItem} style={{ flex: 1, background: selectedMember.has_item ? '#444' : '#28a745', color: 'white', border: 'none', padding: '10px', borderRadius: '4px', fontWeight: 'bold' }}>
+
+                  {selectedMember.has_item ? "BỎ VẬT TƯ" : "MANG VẬT TƯ 📦"}
+
+                </button>
+
+                <button onClick={deleteMember} style={{ flex: 1, background: '#dc3545', color: 'white', border: 'none', padding: '10px', borderRadius: '4px', fontWeight: 'bold' }}>XÓA</button>
+
+              </>
+
+            )}
+
+            <button onClick={() => setSelectedMember(null)} style={{ background: '#333', color: 'white', border: 'none', padding: '10px', borderRadius: '4px' }}>ĐÓNG</button>
+
           </div>
+
         </div>
+
       )}
+
+
+
+      {/* QUÂN SỐ */}
+
+      <div style={{ display: 'flex', justifyContent: 'center', gap: '5px', background: '#0a0a0a', padding: '10px', borderRadius: '8px', border: '1px solid #222', marginBottom: '15px', flexWrap: 'wrap' }}>
+
+        {Object.keys(classInfo).map(cls => (
+
+          <div key={cls} style={{ borderRight: '1px solid #222', paddingRight: '5px', minWidth: '60px' }}>
+
+            <div style={{ color: classInfo[cls].color, fontSize: '10px', fontWeight: 'bold' }}>{cls}</div>
+
+            <div style={{ fontSize: '14px' }}>{members.filter(m => m.class_name === cls).length}</div>
+
+          </div>
+
+        ))}
+
+        
+
+        <div style={{ paddingLeft: '8px', paddingRight: '8px', borderLeft: '2px solid #333' }}>
+
+          <div style={{ fontSize: '10px', fontWeight: 'bold', color: '#aaa' }}>📦 VẬT TƯ</div>
+
+          <div style={{ fontSize: '14px', color: 'gold' }}>{members.filter(m => m.has_item).length}</div>
+
+        </div>
+
+
+
+        <div style={{ paddingLeft: '8px', borderLeft: '2px solid #333' }}>
+
+          <div style={{ fontSize: '10px', fontWeight: 'bold', color: '#00FF00' }}>QUÂN SỐ CHÍNH</div>
+
+          <div style={{ fontSize: '14px', color: '#00FF00' }}>{officialCount} / 60</div>
+
+        </div>
+
+      </div>
+
+      
+
+      <form onSubmit={handleSubmit} style={{ marginBottom: '25px' }}>
+
+        <input style={{ padding: '10px', background: '#111', color: 'white', border: '1px solid #333', borderRadius: '4px', width: '160px' }} placeholder="Tên nhân vật..." value={form.char_name} onChange={e => setForm({...form, char_name: e.target.value})} required />
+
+        <select style={{ padding: '10px', background: '#111', color: 'white', border: '1px solid #333', margin: '0 5px', borderRadius: '4px' }} value={form.class_name} onChange={e => setForm({...form, class_name: e.target.value})}>
+
+          {Object.keys(classInfo).map(c => <option key={c} value={c}>{c}</option>)}
+
+        </select>
+
+        <button type="submit" style={{ padding: '10px 15px', background: 'gold', border: 'none', borderRadius: '4px', fontWeight: 'bold' }}>
+
+          ĐĂNG KÝ {form.team_slot ? `(S${form.team_slot})` : ''}
+
+        </button>
+
+      </form>
+
+
+
+      {isAdmin && movingMember && (
+
+        <div style={{ color: 'gold', marginBottom: '10px', fontSize: '12px', fontWeight: 'bold', background: '#222', padding: '5px', display: 'inline-block', borderRadius: '4px' }}>
+
+          ĐANG CHỌN: [ {movingMember.char_name} ] <br/>
+
+          Chạm ô TRỐNG để dời | Chạm người KHÁC để HOÁN ĐỔI | Chạm lại chính mình để hủy
+
+        </div>
+
+      )}
+
+
+
+      <h2 style={{ color: 'gold', fontSize: '15px', marginBottom: '10px' }}>ĐỘI HÌNH CHÍNH THỨC (60)</h2>
+
+      <div className="team-grid">
+
+        {[...Array(10)].map((_, col) => (
+
+          <div key={col} style={{ background: '#080808', padding: '4px', borderRadius: '4px', border: '1px solid #222' }}>
+
+            <div style={{ color: 'gold', fontSize: '8px', marginBottom: '4px', fontWeight: 'bold' }}>T{col + 1}</div>
+
+            {[...Array(6)].map((_, row) => renderSlotCell('Chính thức', col * 6 + row + 1))}
+
+          </div>
+
+        ))}
+
+      </div>
+
+
+
+      <h2 style={{ color: '#87CEEB', fontSize: '15px', margin: '20px 0 10px 0' }}>DỰ BỊ / HỌC VIỆC (30)</h2>
+
+      <div className="team-grid">
+
+        {[...Array(30)].map((_, i) => renderSlotCell('Học việc', i + 1))}
+
+      </div>
+
+
+
+      <footer style={{ marginTop: '50px', padding: '20px', borderTop: '1px solid #222', maxWidth: '800px', margin: '50px auto 0 auto' }}>
+
+        <p style={{ fontSize: '11px', color: '#888', lineHeight: '1.6', textAlign: 'center' }}>
+
+          <strong style={{ color: '#aaa' }}>Lưu ý:</strong> Mỗi thiết bị chỉ đăng ký được 1 ô. Nếu thành viên xóa lịch sử trình duyệt hoặc đổi máy khác thì họ sẽ không tự xóa được nữa (lúc này cần nhờ các Đương gia (Admin) xóa hộ).
+
+          <br />
+
+          <span style={{ display: 'block', marginTop: '8px', fontSize: '12px' }}>
+
+            Mọi vấn đề liên hệ <strong style={{ color: '#d4af37' }}>VôẢnhNhân (Zalo: Khoa)</strong>
+
+          </span>
+
+        </p>
+
+      </footer>
+
     </div>
+
   );
+
 }
+
+
 
 export default App;
