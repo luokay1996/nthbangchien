@@ -17,7 +17,7 @@ const classInfo = {
 };
 
 const groupSettings = {
-  'Nhóm 1': { bg: 'rgba(255, 255, 255, 0.05)', border: '#7cd826', label: '#7cd826' },
+  'Nhóm 1': { bg: 'rgba(255, 255, 255, 0.05)', border: '#444', label: '#aaa' },
   'Nhóm 2': { bg: 'rgba(0, 255, 255, 0.12)', border: '#00ffff', label: '#00ffff' },
   'Nhóm 3': { bg: 'rgba(255, 215, 0, 0.12)', border: '#ffd700', label: '#ffd700' },
   'Nhóm 4': { bg: 'rgba(255, 69, 0, 0.15)', border: '#ff4500', label: '#ff4500' },
@@ -28,6 +28,7 @@ function App() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isLimitEnabled, setIsLimitEnabled] = useState(true);
   const [movingMember, setMovingMember] = useState(null);
+  const [dragOverSlot, setDragOverSlot] = useState(null); // Hiệu ứng sáng ô khi kéo đè lên
   const [selectedMember, setSelectedMember] = useState(null);
   const [form, setForm] = useState({ char_name: '', class_name: 'Toái Mộng', team_slot: null, type: 'Chính thức' });
   const [teamGroups, setTeamGroups] = useState({});
@@ -61,7 +62,6 @@ function App() {
   }, [fetchData]);
 
   const updateTeamPosition = async (teamId, x, y) => {
-    // Cập nhật UI ngay lập tức để mượt mà (Optimistic Update)
     setTeamPositions(prev => ({ ...prev, [teamId]: { x, y } }));
     await supabase.from('team_positions').update({ pos_x: x, pos_y: y }).eq('team_id', teamId);
   };
@@ -69,15 +69,10 @@ function App() {
   const handleDragEnd = (e, teamId) => {
     if (!mapRef.current) return;
     const rect = mapRef.current.getBoundingClientRect();
-    
-    // Tính toán tọa độ % dựa trên vị trí chuột thả ra
     const x = ((e.clientX - rect.left) / rect.width) * 100;
     const y = ((e.clientY - rect.top) / rect.height) * 100;
-    
-    // Giới hạn trong khung bản đồ
     const safeX = Math.max(0, Math.min(100, x));
     const safeY = Math.max(0, Math.min(100, y));
-    
     updateTeamPosition(teamId, safeX, safeY);
   };
 
@@ -110,23 +105,40 @@ function App() {
   const toggleItem = async () => {
     if (!selectedMember) return;
     const { error } = await supabase.from('register_list').update({ has_item: !selectedMember.has_item }).eq('id', selectedMember.id);
-    if (!error) setSelectedMember(null);
+    if (!error) {
+      fetchData();
+      setSelectedMember(null);
+    }
   };
 
   const handleSlotClick = async (type, slotNum) => {
     const occupant = members.find(m => m.type === type && m.team_slot === slotNum);
+    
     if (isAdmin && movingMember) {
       if (occupant) {
+        // Optimistic Update: Hoán đổi ngay lập tức trên UI
+        const updatedMembers = members.map(m => {
+          if (m.id === movingMember.id) return { ...m, type: occupant.type, team_slot: occupant.team_slot };
+          if (m.id === occupant.id) return { ...m, type: movingMember.type, team_slot: movingMember.team_slot };
+          return m;
+        });
+        setMembers(updatedMembers);
+
         await Promise.all([
           supabase.from('register_list').update({ type: occupant.type, team_slot: occupant.team_slot }).eq('id', movingMember.id),
           supabase.from('register_list').update({ type: movingMember.type, team_slot: movingMember.team_slot }).eq('id', occupant.id)
         ]);
       } else {
+        // Optimistic Update: Di chuyển ngay lập tức trên UI
+        setMembers(members.map(m => m.id === movingMember.id ? { ...m, type, team_slot: slotNum } : m));
         await supabase.from('register_list').update({ type, team_slot: slotNum }).eq('id', movingMember.id);
       }
       setMovingMember(null);
+      setDragOverSlot(null);
+      fetchData();
       return;
     }
+
     if (occupant) {
       setSelectedMember(occupant);
       if (isAdmin) setMovingMember(occupant);
@@ -134,6 +146,32 @@ function App() {
     }
     setForm({ ...form, type, team_slot: slotNum });
     setSelectedMember(null);
+  };
+
+  // LOGIC KÉO THẢ THÀNH VIÊN
+  const onMemberDragStart = (e, member) => {
+    if (!isAdmin) return;
+    setMovingMember(member);
+    // Tạo hiệu ứng mờ cho phần tử đang kéo
+    e.currentTarget.style.opacity = '0.4';
+  };
+
+  const onMemberDragEnd = (e) => {
+    e.currentTarget.style.opacity = '1';
+    setDragOverSlot(null);
+  };
+
+  const onMemberDragOver = (e, type, slotNum) => {
+    e.preventDefault();
+    if (!isAdmin) return;
+    setDragOverSlot(`${type}-${slotNum}`);
+  };
+
+  const onMemberDrop = async (e, targetType, targetSlotNum) => {
+    e.preventDefault();
+    setDragOverSlot(null);
+    if (!isAdmin || !movingMember) return;
+    await handleSlotClick(targetType, targetSlotNum);
   };
 
   const handleSubmit = async (e) => {
@@ -147,6 +185,7 @@ function App() {
     if (!error) {
       localStorage.setItem('my_char_name', form.char_name);
       setForm({ ...form, char_name: '', team_slot: null });
+      fetchData();
     }
   };
 
@@ -157,6 +196,7 @@ function App() {
       if (!error) {
         if (selectedMember.char_name === localStorage.getItem('my_char_name')) localStorage.removeItem('my_char_name');
         setSelectedMember(null);
+        fetchData();
       }
     }
   };
@@ -165,22 +205,32 @@ function App() {
     const occupant = members.find(m => m.type === type && m.team_slot === slotNum);
     const isSelected = form.type === type && form.team_slot === slotNum;
     const isBeingMoved = movingMember && movingMember.id === occupant?.id;
+    const isHovered = dragOverSlot === `${type}-${slotNum}`;
     const isLeaderSlot = type === 'Chính thức' && (slotNum - 1) % 6 === 0;
 
     return (
-      <div key={`${type}-${slotNum}`} onClick={() => handleSlotClick(type, slotNum)}
+      <div 
+        key={`${type}-${slotNum}`} 
+        onClick={() => handleSlotClick(type, slotNum)}
+        draggable={isAdmin && !!occupant}
+        onDragStart={(e) => onMemberDragStart(e, occupant)}
+        onDragEnd={onMemberDragEnd}
+        onDragOver={(e) => onMemberDragOver(e, type, slotNum)}
+        onDragLeave={() => setDragOverSlot(null)}
+        onDrop={(e) => onMemberDrop(e, type, slotNum)}
+        className={`slot-cell ${isHovered ? 'drag-hover' : ''} ${isBeingMoved ? 'moving' : ''}`}
         style={{
           height: '42px', margin: '3px 0', borderRadius: '4px', position: 'relative',
           backgroundColor: occupant ? classInfo[occupant.class_name]?.color : '#111',
-          border: isBeingMoved ? '2px solid white' : isSelected ? '2px solid gold' : '1px solid #333',
+          border: isBeingMoved ? '2px solid white' : isSelected ? '2px solid gold' : isHovered ? '2px dashed #fff' : '1px solid #333',
           display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
           fontSize: '10px', color: occupant?.class_name === 'Long Ngâm' ? '#000' : 'white', fontWeight: 'bold',
-          padding: '0 4px', overflow: 'hidden'
+          padding: '0 4px', overflow: 'hidden', transition: 'all 0.1s ease'
         }}
       >
         {isLeaderSlot && <span style={{ position: 'absolute', top: '1px', left: '2px', fontSize: '8px', opacity: 0.8 }}>🔑</span>}
         {occupant ? (
-          <div style={{ width: '100%', textAlign: 'center', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          <div style={{ width: '100%', textAlign: 'center', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', pointerEvents: 'none' }}>
             {occupant.char_name} {occupant.has_item && '📦'}
           </div>
         ) : `S${slotNum}`}
@@ -196,6 +246,10 @@ function App() {
         .group-select { width: 100%; background: #000; color: #fff; border: 1px solid #444; font-size: 10px; border-radius: 3px; cursor: pointer; margin-top: 5px; padding: 3px; font-weight: bold; appearance: none; text-align: center; }
         .group-select:disabled { cursor: default; border-style: dashed; color: #fff; opacity: 1; }
         
+        .slot-cell.drag-hover { filter: brightness(1.5); transform: scale(1.05); z-index: 5; }
+        .slot-cell.moving { animation: pulse 1s infinite; }
+        @keyframes pulse { 0% { opacity: 0.6; } 50% { opacity: 1; } 100% { opacity: 0.6; } }
+
         .map-section { max-width: 900px; margin: 40px auto; padding: 20px; background: #0a0a0a; border-radius: 12px; border: 1px solid #333; position: relative; }
         .map-container { position: relative; width: 100%; border-radius: 8px; overflow: hidden; border: 2px solid #444; margin-top: 15px; }
         .map-bg { width: 100%; display: block; opacity: 0.8; pointer-events: none; -webkit-user-drag: none; }
@@ -296,7 +350,6 @@ function App() {
           />
           {[...Array(10)].map((_, i) => {
             const teamId = i + 1;
-            // Nếu chưa có tọa độ trong DB, tạo khoảng cách 8% giữa mỗi nút
             const pos = teamPositions[teamId] || { x: 8 * teamId, y: 15 };
             const groupColor = groupSettings[teamGroups[teamId] || 'Nhóm 1'].border;
             
