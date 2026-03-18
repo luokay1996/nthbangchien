@@ -17,7 +17,7 @@ const classInfo = {
 };
 
 const groupSettings = {
-  'Nhóm 1': { bg: 'rgba(255, 255, 255, 0.05)', border: '#444', label: '#aaa' },
+  'Nhóm 1': { bg: 'rgba(255, 255, 255, 0.05)', border: '#87db65', label: '#87db65' },
   'Nhóm 2': { bg: 'rgba(0, 255, 255, 0.12)', border: '#00ffff', label: '#00ffff' },
   'Nhóm 3': { bg: 'rgba(255, 215, 0, 0.12)', border: '#ffd700', label: '#ffd700' },
   'Nhóm 4': { bg: 'rgba(255, 69, 0, 0.15)', border: '#ff4500', label: '#ff4500' },
