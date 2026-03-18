@@ -416,7 +416,7 @@ function App() {
           )}
         </div>
         <p style={{ fontSize: '11px', color: '#666', marginTop: '10px' }}>
-            * Admin: Kéo icon 🗡️ 🛡️ ⚠️ từ góc phải vào bản đồ để chỉ đạo mục tiêu.
+            * Đăng nhập admin để sử dụng bản đồ chiến thuật chỉ đạo bang chiến. - Đông Đông
         </p>
       </div>
 
