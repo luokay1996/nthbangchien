@@ -417,7 +417,7 @@ const addToLibrary = async (url) => {
           <div style={{ fontSize: '11px', color: '#888', marginBottom: '15px' }}>Hệ: {selectedMember.class_name} | {selectedMember.type}</div>
 
           <div style={{ marginBottom: '15px', background: '#222', padding: '10px', borderRadius: '8px' }}>
-            <div style={{ fontSize: '10px', color: 'gold', marginBottom: '8px' }}>CHỌN SKILL TỪ KHO CHUNG</div>
+            <div style={{ fontSize: '10px', color: 'gold', marginBottom: '8px' }}>CHỌN SKILL</div>
             <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap', maxHeight: '150px', overflowY: 'auto', padding: '5px' }}>
               {skillLibrary.map((item) => (
                 <div key={item.id} className="skill-lib-item-container">
