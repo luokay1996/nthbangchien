@@ -23,15 +23,6 @@ const groupSettings = {
   'Nhóm 4': { bg: 'rgba(255, 69, 0, 0.15)', border: '#ff4500', label: '#ff4500' },
 };
 
-const SKILL_LIBRARY = [
-  "https://i.postimg.cc/DfDDfmVs/Screenshot-2026-04-02-232308.png",
-  "https://i.postimg.cc/nV55VM8m/Screenshot-2026-04-02-232315.png",
-  "https://i.postimg.cc/J7gg7twZ/Screenshot-2026-04-02-232326.png",
-  "https://i.postimg.cc/PfccfNG8/truongcahienquan.png",
-  "https://i.postimg.cc/y6556Wqj/tuongbang.png",
-  "https://i.postimg.cc/44MM4nCB/tuonggio.png"
-];
-
 function App() {
   const [members, setMembers] = useState([]);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -44,7 +35,8 @@ function App() {
   const [teamPositions, setTeamPositions] = useState({});
   const [memberSkills, setMemberSkills] = useState([]);
   
-  // --- STATE MỚI CHO TÍNH NĂNG TẢI ẢNH ---
+  // --- STATE CHO KHO SKILL ĐỘNG ---
+  const [skillLibrary, setSkillLibrary] = useState([]);
   const [customSkillUrl, setCustomSkillUrl] = useState('');
 
   const mapRef = useRef(null);
@@ -54,9 +46,11 @@ function App() {
     const { data: groups } = await supabase.from('team_groups').select('*');
     const { data: positions } = await supabase.from('team_positions').select('*');
     const { data: skills } = await supabase.from('member_skills').select('*');
+    const { data: lib } = await supabase.from('skill_library').select('*'); // Lấy kho skill từ DB
 
     if (mems) setMembers(mems);
     if (skills) setMemberSkills(skills); 
+    if (lib) setSkillLibrary(lib);
     if (groups) {
       const groupMap = Object.fromEntries(groups.map(g => [g.team_id, g.group_name]));
       setTeamGroups(groupMap);
@@ -74,6 +68,7 @@ function App() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'team_groups' }, fetchData)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'team_positions' }, fetchData)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'member_skills' }, fetchData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'skill_library' }, fetchData)
       .subscribe();
     return () => supabase.removeChannel(channel);
   }, [fetchData]);
@@ -166,7 +161,8 @@ function App() {
     setSelectedMember(null);
   };
 
-  const addSkill = async (url) => {
+  // --- HÀM THÊM SKILL VÀO NHÂN VẬT (DÀNH CHO TẤT CẢ) ---
+  const addSkillToMember = async (url) => {
     if (!selectedMember || !url) return;
     const currentSkills = memberSkills.filter(s => s.member_id === selectedMember.id);
     if (currentSkills.length >= 5) return alert("Tối đa 5 kỹ năng!");
@@ -185,30 +181,38 @@ function App() {
       pos_x: slot, 
       pos_y: 0 
     }]);
+    if (!error) fetchData();
+  };
 
-    if (error) {
-      console.error("Lỗi thêm kỹ năng:", error);
-      alert("Lỗi kết nối cơ sở dữ liệu!");
-    } else {
-      setCustomSkillUrl(''); // Reset ô nhập sau khi thêm
+  // --- HÀM QUẢN LÝ KHO SKILL (CHỈ ADMIN) ---
+  const addToLibrary = async (url) => {
+    if (!isAdmin) return alert("Chỉ Admin mới có quyền chỉnh sửa kho skill!");
+    if (!url) return;
+    const { error } = await supabase.from('skill_library').insert([{ url }]);
+    if (!error) {
+      setCustomSkillUrl('');
       fetchData();
     }
   };
 
-  // --- HÀM XỬ LÝ TẢI FILE ẢNH LÊN ---
+  const removeFromLibrary = async (id) => {
+    if (!isAdmin) return;
+    if (window.confirm("Xóa skill này khỏi kho chung?")) {
+      await supabase.from('skill_library').delete().eq('id', id);
+      fetchData();
+    }
+  };
+
   const handleFileChange = (e) => {
+    if (!isAdmin) return alert("Chỉ Admin mới có quyền tải ảnh vào kho!");
     const file = e.target.files[0];
     if (!file) return;
-    if (file.size > 2 * 1024 * 1024) return alert("Ảnh quá nặng! Vui lòng chọn ảnh < 2MB");
-
     const reader = new FileReader();
-    reader.onloadend = () => {
-      addSkill(reader.result); // Thêm chuỗi Base64 vào DB
-    };
+    reader.onloadend = () => addToLibrary(reader.result);
     reader.readAsDataURL(file);
   };
 
-  const removeSkill = async (id) => {
+  const removeSkillFromMember = async (id) => {
     await supabase.from('member_skills').delete().eq('id', id);
     fetchData();
   };
@@ -290,8 +294,10 @@ function App() {
         }
         .team-node:active { transform: translate(-50%, -50%) scale(1.2); z-index: 100; }
         .skill-box { width: 65px; height: 65px; background: #222; border: 1px solid #444; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #555; position: relative; overflow: visible; }
+        .skill-lib-item-container { position: relative; }
         .skill-lib-item { width: 60px; height: 60px; cursor: pointer; border-radius: 6px; border: 1px solid #333; transition: transform 0.1s; }
         .skill-lib-item:hover { border-color: gold; transform: scale(1.1); }
+        .lib-remove-btn { position: absolute; top: -5px; right: -5px; background: black; color: red; border: 1px solid red; border-radius: 50%; width: 16px; height: 16px; font-size: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 5; }
         .custom-add-skill { display: flex; gap: 5px; margin-top: 10px; padding: 0 10px; }
         .custom-input { flex: 1; background: #000; border: 1px solid #444; color: white; padding: 6px; border-radius: 4px; fontSize: 11px; }
         .upload-btn { background: #333; color: white; border: 1px solid #555; padding: 6px 10px; border-radius: 4px; cursor: pointer; fontSize: 11px; font-weight: bold; }
@@ -394,28 +400,32 @@ function App() {
           <div style={{ fontSize: '11px', color: '#888', marginBottom: '15px' }}>Hệ: {selectedMember.class_name} | {selectedMember.type}</div>
 
           <div style={{ marginBottom: '15px', background: '#222', padding: '10px', borderRadius: '8px' }}>
-            <div style={{ fontSize: '10px', color: 'gold', marginBottom: '8px' }}>CHỌN HOẶC TẢI SKILL MỚI</div>
-            <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap' }}>
-              {SKILL_LIBRARY.map((url, index) => (
-                <img key={index} src={url} className="skill-lib-item" onClick={() => addSkill(url)} alt="skill" />
+            <div style={{ fontSize: '10px', color: 'gold', marginBottom: '8px' }}>CHỌN SKILL TỪ KHO CHUNG</div>
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap', maxHeight: '150px', overflowY: 'auto', padding: '5px' }}>
+              {skillLibrary.map((item) => (
+                <div key={item.id} className="skill-lib-item-container">
+                  <img src={item.url} className="skill-lib-item" onClick={() => addSkillToMember(item.url)} alt="skill" />
+                  {/* CHỈ ADMIN THẤY NÚT XÓA KHỎI KHO */}
+                  {isAdmin && <div className="lib-remove-btn" onClick={(e) => { e.stopPropagation(); removeFromLibrary(item.id); }}>×</div>}
+                </div>
               ))}
+              {skillLibrary.length === 0 && <div style={{fontSize: '10px', color: '#555'}}>Kho skill trống...</div>}
             </div>
 
-            {/* --- KHU VỰC TÙY CHỈNH THÊM SKILL --- */}
-            <div className="custom-add-skill">
-              <input 
-                className="custom-input" 
-                placeholder="Dán link ảnh skill..." 
-                value={customSkillUrl}
-                onChange={(e) => setCustomSkillUrl(e.target.value)}
-              />
-              <button className="add-btn" onClick={() => addSkill(customSkillUrl)}>THÊM</button>
-              
-              <label className="upload-btn">
-                TẢI ẢNH
-                <input type="file" accept="image/*" hidden onChange={handleFileChange} />
-              </label>
-            </div>
+            {/* --- CHỈ ADMIN CÓ QUYỀN THÊM SKILL VÀO KHO --- */}
+            {isAdmin && (
+              <div style={{ marginTop: '10px', borderTop: '1px solid #333', paddingTop: '10px' }}>
+                <div style={{ fontSize: '9px', color: '#888', marginBottom: '5px' }}>ADMIN: THÊM SKILL MỚI VÀO KHO</div>
+                <div className="custom-add-skill">
+                  <input className="custom-input" placeholder="Link ảnh skill..." value={customSkillUrl} onChange={(e) => setCustomSkillUrl(e.target.value)} />
+                  <button className="add-btn" onClick={() => addToLibrary(customSkillUrl)}>THÊM</button>
+                  <label className="upload-btn">
+                    TẢI ẢNH
+                    <input type="file" accept="image/*" hidden onChange={handleFileChange} />
+                  </label>
+                </div>
+              </div>
+            )}
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginBottom: '20px', background: 'rgba(0,0,0,0.4)', padding: '10px', borderRadius: '8px' }}>
@@ -426,7 +436,9 @@ function App() {
                   {skill ? (
                     <>
                       <img src={skill.skill_url} style={{ width: '100%', height: '100%', borderRadius: '6px' }} alt="equipped" />
-                      <div onClick={() => removeSkill(skill.id)} style={{ position: 'absolute', top: '-5px', right: '-5px', background: 'red', color: 'white', width: '18px', height: '18px', borderRadius: '50%', fontSize: '11px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', border: '1px solid white' }}>×</div>
+                      {(isAdmin || selectedMember.char_name === localStorage.getItem('my_char_name')) && (
+                        <div onClick={() => removeSkillFromMember(skill.id)} style={{ position: 'absolute', top: '-5px', right: '-5px', background: 'red', color: 'white', width: '18px', height: '18px', borderRadius: '50%', fontSize: '11px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', border: '1px solid white' }}>×</div>
+                      )}
                     </>
                   ) : 'Trống'}
                 </div>
