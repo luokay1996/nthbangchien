@@ -392,7 +392,7 @@ function App() {
 
           {/* CHỌN KỸ NĂNG */}
           <div style={{ marginBottom: '15px', background: '#222', padding: '10px', borderRadius: '8px' }}>
-            <div style={{ fontSize: '10px', color: 'gold', marginBottom: '8px' }}>CHỌN KỸ NĂNG ĐỂ THÊM (PHÓNG TO 50%)</div>
+            <div style={{ fontSize: '10px', color: 'gold', marginBottom: '8px' }}>CHỌN KỸ NĂNG ĐỂ THÊM </div>
             <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap' }}>
               {SKILL_LIBRARY.map((url, index) => (
                 <img key={index} src={url} className="skill-lib-item" onClick={() => addSkill(url)} alt="skill" />
