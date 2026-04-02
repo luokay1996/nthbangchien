@@ -13,7 +13,7 @@ const classInfo = {
   'Thần Tương': { color: '#4169e1ff' }, 
   'Tố Vấn': { color: '#FF69B4' },
   'Cửu Linh': { color: '#800080' },
-  'Long Ngâm': { color: '#66FFFF' },
+  'Long Ngâm': { color: '#0cf13e' },
 };
 
 const groupSettings = {
