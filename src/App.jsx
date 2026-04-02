@@ -33,7 +33,7 @@ const groupSettings = {
   'Nhóm 4': { bg: 'rgba(255, 69, 0, 0.15)', border: '#ff4500', label: '#ff4500' },
 };
 
-// COMPONENT POP-UP TÁCH RIÊNG (GIỮ NGUYÊN LOGIC GỐC)
+// COMPONENT POP-UP TÁCH RIÊNG (ĐÃ ĐẢO THỨ TỰ: KHO TRÊN - VÙNG THẢ DƯỚI)
 const MemberDetailPopup = ({ 
   selectedMember, 
   setSelectedMember, 
@@ -54,18 +54,34 @@ const MemberDetailPopup = ({
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div style={{ background: '#111', padding: '20px', borderRadius: '20px', border: '2px solid gold', width: '95%', maxWidth: '500px', boxShadow: '0 0 30px rgba(212, 175, 55, 0.3)' }}>
         
-        <div style={{ fontWeight: 'bold', color: 'gold', fontSize: '22px', textShadow: '0 0 10px rgba(255,215,0,0.5)', marginBottom: '10px' }}>
+        <div style={{ fontWeight: 'bold', color: 'gold', fontSize: '22px', textShadow: '0 0 10px rgba(255,215,0,0.5)', marginBottom: '15px', textAlign: 'center' }}>
           {selectedMember.char_name}
         </div>
 
-        {/* VÙNG ĐEN: NƠI THẢ ICON XUỐNG */}
+        {/* 1. KHO KỸ NĂNG: BÂY GIỜ NẰM Ở TRÊN */}
+        <div style={{ marginBottom: '20px', padding: '15px', background: '#1a1a1a', borderRadius: '10px', border: '1px solid #333' }}>
+          <div style={{ fontSize: '12px', color: 'gold', marginBottom: '10px', fontWeight: 'bold', textAlign: 'center' }}>KHO KỸ NĂNG (Kéo icon xuống)</div>
+          <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
+            {SKILL_ICONS.map((url, idx) => (
+              <img 
+                key={idx} 
+                src={url} 
+                draggable
+                onDragStart={(e) => handleStartDragFromLibrary(e, url)}
+                className="skill-library-icon"
+              />
+            ))}
+          </div>
+        </div>
+
+        {/* 2. VÙNG ĐEN: BÂY GIỜ NẰM Ở DƯỚI (NƠI TRANG BỊ) */}
         <div 
           ref={dropZoneRef}
           onDragOver={(e) => e.preventDefault()}
           onDrop={handleDropOnZone}
           style={{ position: 'relative', height: '260px', background: '#000', borderRadius: '12px', border: '2px dashed #333', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
         >
-          <div style={{ fontSize: '11px', color: '#444', pointerEvents: 'none' }}>Kéo Icon từ kho và thả vào đây</div>
+          <div style={{ fontSize: '11px', color: '#444', pointerEvents: 'none' }}>Kéo Icon từ kho và thả vào đây để trang bị</div>
           
           {memberSkills.filter(s => s.member_id === selectedMember.id).map(skill => (
             <img 
@@ -78,22 +94,6 @@ const MemberDetailPopup = ({
               style={{ left: `${skill.pos_x}%`, top: `${skill.pos_y}%` }}
             />
           ))}
-        </div>
-
-        {/* KHO KỸ NĂNG: NƠI CHỨA ICON GỐC */}
-        <div style={{ marginTop: '20px', padding: '15px', background: '#1a1a1a', borderRadius: '10px', border: '1px solid #333' }}>
-          <div style={{ fontSize: '12px', color: 'gold', marginBottom: '10px', fontWeight: 'bold' }}>KHO KỸ NĂNG (Kéo icon xuống)</div>
-          <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
-            {SKILL_ICONS.map((url, idx) => (
-              <img 
-                key={idx} 
-                src={url} 
-                draggable
-                onDragStart={(e) => handleStartDragFromLibrary(e, url)}
-                className="skill-library-icon"
-              />
-            ))}
-          </div>
         </div>
 
         <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
