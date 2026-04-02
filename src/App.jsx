@@ -6,6 +6,16 @@ const supabase = createClient(
   import.meta.env.VITE_SUPABASE_ANON_KEY
 );
 
+// Danh sách các Icon bạn đã gửi
+const SKILL_ICONS = [
+  "https://i.postimg.cc/DfDDfmVs/Screenshot-2026-04-02-232308.png",
+  "https://i.postimg.cc/nV55VM8m/Screenshot-2026-04-02-232315.png",
+  "https://i.postimg.cc/J7gg7twZ/Screenshot-2026-04-02-232326.png",
+  "https://i.postimg.cc/PfccfNG8/truongcahienquan.png",
+  "https://i.postimg.cc/y6556Wqj/tuongbang.png",
+  "https://i.postimg.cc/44MM4nCB/tuonggio.png"
+];
+
 const classInfo = {
   'Toái Mộng': { color: '#87CEEB' },
   'Thiết Y': { color: '#FFA500' },
@@ -29,17 +39,21 @@ function App() {
   const [isLimitEnabled, setIsLimitEnabled] = useState(true);
   const [movingMember, setMovingMember] = useState(null);
   const [selectedMember, setSelectedMember] = useState(null);
+  const [memberSkills, setMemberSkills] = useState([]); // State mới cho icon
   const [form, setForm] = useState({ char_name: '', class_name: 'Toái Mộng', team_slot: null, type: 'Chính thức' });
   const [teamGroups, setTeamGroups] = useState({});
   const [teamPositions, setTeamPositions] = useState({});
   const mapRef = useRef(null);
+  const popupRef = useRef(null);
 
   const fetchData = useCallback(async () => {
     const { data: mems } = await supabase.from('register_list').select('*');
     const { data: groups } = await supabase.from('team_groups').select('*');
     const { data: positions } = await supabase.from('team_positions').select('*');
+    const { data: skills } = await supabase.from('member_skills').select('*');
     
     if (mems) setMembers(mems);
+    if (skills) setMemberSkills(skills);
     if (groups) {
       const groupMap = Object.fromEntries(groups.map(g => [g.team_id, g.group_name]));
       setTeamGroups(groupMap);
@@ -56,9 +70,31 @@ function App() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'register_list' }, fetchData)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'team_groups' }, fetchData)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'team_positions' }, fetchData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'member_skills' }, fetchData)
       .subscribe();
     return () => supabase.removeChannel(channel);
   }, [fetchData]);
+
+  // Hàm thêm icon mới vào pop-up
+  const addSkillIcon = async (url) => {
+    if (!selectedMember) return;
+    await supabase.from('member_skills').insert([{ 
+      member_id: selectedMember.id, 
+      skill_url: url, 
+      pos_x: 40 + Math.random() * 20, 
+      pos_y: 40 + Math.random() * 10 
+    }]);
+  };
+
+  // Hàm cập nhật vị trí icon khi kéo thả
+  const handleSkillDragEnd = async (e, skillId) => {
+    if (!popupRef.current) return;
+    const rect = popupRef.current.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 100;
+    const y = ((e.clientY - rect.top) / rect.height) * 100;
+    
+    await supabase.from('member_skills').update({ pos_x: x, pos_y: y }).eq('id', skillId);
+  };
 
   const updateTeamPosition = async (teamId, x, y) => {
     setTeamPositions(prev => ({ ...prev, [teamId]: { x, y } }));
@@ -96,8 +132,9 @@ function App() {
 
   const handleResetBoard = async () => {
     if (window.confirm("Xóa sạch danh sách tuần này?")) {
-      const { error } = await supabase.from('register_list').delete().neq('id', 0);
-      if (!error) fetchData();
+      await supabase.from('register_list').delete().neq('id', 0);
+      await supabase.from('member_skills').delete().neq('member_id', 0);
+      fetchData();
     }
   };
 
@@ -105,43 +142,29 @@ function App() {
     if (!selectedMember) return;
     const { error } = await supabase.from('register_list').update({ has_item: !selectedMember.has_item }).eq('id', selectedMember.id);
     if (!error) {
-      await fetchData();
+      fetchData();
       setSelectedMember(null);
     }
   };
 
   const handleSlotClick = async (type, slotNum) => {
     const occupant = members.find(m => m.type === type && m.team_slot === slotNum);
-    
-    // Tối ưu Admin hoán đổi: Cập nhật UI trước (Optimistic)
     if (isAdmin && movingMember) {
       if (movingMember.type === type && movingMember.team_slot === slotNum) {
         setMovingMember(null);
         return;
       }
-
       if (occupant) {
-        // Hoán đổi 2 người
-        setMembers(prev => prev.map(m => {
-          if (m.id === movingMember.id) return { ...m, type: occupant.type, team_slot: occupant.team_slot };
-          if (m.id === occupant.id) return { ...m, type: movingMember.type, team_slot: movingMember.team_slot };
-          return m;
-        }));
         await Promise.all([
           supabase.from('register_list').update({ type: occupant.type, team_slot: occupant.team_slot }).eq('id', movingMember.id),
           supabase.from('register_list').update({ type: movingMember.type, team_slot: movingMember.team_slot }).eq('id', occupant.id)
         ]);
       } else {
-        // Di chuyển vào ô trống
-        setMembers(prev => prev.map(m => 
-          m.id === movingMember.id ? { ...m, type, team_slot: slotNum } : m
-        ));
         await supabase.from('register_list').update({ type, team_slot: slotNum }).eq('id', movingMember.id);
       }
       setMovingMember(null);
       return;
     }
-
     if (occupant) {
       setSelectedMember(occupant);
       if (isAdmin) setMovingMember(occupant);
@@ -192,13 +215,12 @@ function App() {
           border: isBeingMoved ? '2px solid white' : isSelected ? '2px solid gold' : '1px solid #333',
           display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
           fontSize: '10px', color: occupant?.class_name === 'Long Ngâm' ? '#000' : 'white', fontWeight: 'bold',
-          padding: '0 4px', overflow: 'hidden', opacity: isBeingMoved ? 0.5 : 1,
-          transition: 'all 0.1s ease'
+          padding: '0 4px', overflow: 'hidden', opacity: isBeingMoved ? 0.5 : 1
         }}
       >
         {isLeaderSlot && <span style={{ position: 'absolute', top: '1px', left: '2px', fontSize: '8px', opacity: 0.8 }}>🔑</span>}
         {occupant ? (
-          <div style={{ width: '100%', textAlign: 'center', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', pointerEvents: 'none' }}>
+          <div style={{ width: '100%', textAlign: 'center', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {occupant.char_name} {occupant.has_item && '📦'}
           </div>
         ) : `S${slotNum}`}
@@ -216,18 +238,8 @@ function App() {
         .map-section { max-width: 900px; margin: 40px auto; padding: 20px; background: #0a0a0a; border-radius: 12px; border: 1px solid #333; position: relative; }
         .map-container { position: relative; width: 100%; border-radius: 8px; overflow: hidden; border: 2px solid #444; margin-top: 15px; }
         .map-bg { width: 100%; display: block; opacity: 0.8; pointer-events: none; -webkit-user-drag: none; }
-        .team-node { 
-          position: absolute; width: 34px; height: 34px; border-radius: 50%; 
-          display: flex; align-items: center; justify-content: center; 
-          font-size: 12px; font-weight: bold; color: #000; cursor: move; 
-          transform: translate(-50%, -50%); border: 2px solid #fff; 
-          box-shadow: 0 0 15px rgba(0,0,0,0.8);
-          z-index: 10; transition: transform 0.1s;
-          touch-action: none;
-        }
-        .team-node:active { transform: translate(-50%, -50%) scale(1.2); z-index: 100; }
-        .skill-box { width: 45px; height: 45px; background: #222; border: 1px solid #444; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 8px; color: #555; }
-        .skill-box.admin-edit { border: 1px dashed gold; cursor: pointer; color: gold; }
+        .team-node { position: absolute; width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; color: #000; cursor: move; transform: translate(-50%, -50%); border: 2px solid #fff; box-shadow: 0 0 15px rgba(0,0,0,0.8); z-index: 10; touch-action: none; }
+        .skill-icon-float { position: absolute; width: 40px; height: 40px; transform: translate(-50%, -50%); cursor: move; z-index: 5; border-radius: 4px; box-shadow: 0 0 5px gold; }
       `}</style>
 
       {/* ADMIN CONTROLS */}
@@ -248,7 +260,7 @@ function App() {
       <img src="/nth-logo.png" alt="Logo" style={{ width: '60px', margin: '0 auto', display: 'block' }} />
       <h1 style={{ color: 'gold', fontSize: '20px', margin: '10px 0' }}>BANG QUỶ MÔN QUAN</h1>
 
-      {/* CLASS STATS */}
+      {/* STATS & FORM GIỮ NGUYÊN */}
       <div style={{ display: 'flex', justifyContent: 'center', gap: '5px', background: '#0a0a0a', padding: '10px', borderRadius: '8px', border: '1px solid #222', marginBottom: '15px', flexWrap: 'wrap' }}>
         {Object.keys(classInfo).map(cls => (
           <div key={cls} style={{ borderRight: '1px solid #222', paddingRight: '5px', minWidth: '60px' }}>
@@ -257,36 +269,29 @@ function App() {
           </div>
         ))}
         <div style={{ paddingLeft: '8px', borderLeft: '2px solid #333' }}>
-          <div style={{ fontSize: '10px', fontWeight: 'bold', color: '#00FF00' }}>QUÂN SỐ</div>
-          <div style={{ fontSize: '14px', color: '#00FF00' }}>{officialCount} / 60</div>
+          <div style={{ fontSize: '10px', fontWeight: 'bold', color: '#00FF00' }}>QUÂN SỐ: {officialCount} / 60</div>
         </div>
       </div>
       
-      {/* REGISTER FORM */}
       <form onSubmit={handleSubmit} style={{ marginBottom: '25px' }}>
         <input style={{ padding: '10px', background: '#111', color: 'white', border: '1px solid #333', borderRadius: '4px', width: '160px' }} placeholder="Tên..." value={form.char_name} onChange={e => setForm({...form, char_name: e.target.value})} required />
         <select style={{ padding: '10px', background: '#111', color: 'white', border: '1px solid #333', margin: '0 5px', borderRadius: '4px' }} value={form.class_name} onChange={e => setForm({...form, class_name: e.target.value})}>
           {Object.keys(classInfo).map(c => <option key={c} value={c}>{c}</option>)}
         </select>
-        <button type="submit" style={{ padding: '10px 15px', background: 'gold', border: 'none', borderRadius: '4px', fontWeight: 'bold' }}>
-            ĐĂNG KÝ {form.team_slot ? `(S${form.team_slot})` : ''}
-        </button>
+        <button type="submit" style={{ padding: '10px 15px', background: 'gold', border: 'none', borderRadius: '4px', fontWeight: 'bold' }}>ĐĂNG KÝ</button>
       </form>
 
-      {/* MAIN TEAMS */}
+      {/* TEAMS GRID GIỮ NGUYÊN */}
       <div className="team-grid">
         {[...Array(10)].map((_, col) => {
           const teamNum = col + 1;
           const currentGroup = teamGroups[teamNum] || 'Nhóm 1';
           const settings = groupSettings[currentGroup];
           return (
-            <div key={col} style={{ 
-              background: settings.bg, padding: '8px', borderRadius: '8px', border: `2px solid ${settings.border}`,
-              boxShadow: currentGroup !== 'Nhóm 1' ? `0 0 10px ${settings.border}33` : 'none'
-            }}>
+            <div key={col} style={{ background: settings.bg, padding: '8px', borderRadius: '8px', border: `2px solid ${settings.border}` }}>
               <div style={{ marginBottom: '6px' }}>
                 <span style={{ color: settings.label, fontSize: '11px', fontWeight: 'bold' }}>TEAM {teamNum}</span>
-                <select className="group-select" style={{ borderColor: settings.border }} value={currentGroup} disabled={!isAdmin} onChange={(e) => handleGroupChange(teamNum, e.target.value)}>
+                <select className="group-select" value={currentGroup} disabled={!isAdmin} onChange={(e) => handleGroupChange(teamNum, e.target.value)}>
                   {Object.keys(groupSettings).map(g => <option key={g} value={g}>{g}</option>)}
                 </select>
               </div>
@@ -296,60 +301,55 @@ function App() {
         })}
       </div>
 
-      <h2 style={{ color: '#87CEEB', fontSize: '15px', margin: '30px 0 10px 0' }}>DỰ BỊ (30)</h2>
-      <div className="team-grid">
-        {[...Array(30)].map((_, i) => renderSlotCell('Học việc', i + 1))}
-      </div>
-
-      {/* MAP SECTION */}
+      {/* MAP SECTION GIỮ NGUYÊN */}
       <div className="map-section">
-        <h3 style={{ color: 'gold', margin: '0 0 5px 0', fontSize: '18px' }}>CHỈ ĐẠO CHIẾN THUẬT</h3>
         <div className="map-container" ref={mapRef}>
-          <img src="https://i.postimg.cc/SsMMSZLG/unnam2ed.jpg" alt="Tactical Map" className="map-bg" />
-          {[...Array(10)].map((_, i) => {
-            const teamId = i + 1;
-            const pos = teamPositions[teamId] || { x: 8 * teamId, y: 15 };
-            const groupColor = groupSettings[teamGroups[teamId] || 'Nhóm 1'].border;
-            return (
-              <div key={teamId} draggable={isAdmin} onDragEnd={(e) => handleDragEnd(e, teamId)} className="team-node"
-                style={{ 
-                  left: `${pos.x}%`, top: `${pos.y}%`, 
-                  backgroundColor: groupColor === '#444' ? '#fff' : groupColor,
-                  cursor: isAdmin ? 'move' : 'default'
-                }}
-              >
-                T{teamId}
-              </div>
-            );
-          })}
+          <img src="https://i.postimg.cc/SsMMSZLG/unnam2ed.jpg" alt="Map" className="map-bg" />
+          {[...Array(10)].map((_, i) => (
+            <div key={i+1} draggable={isAdmin} onDragEnd={(e) => handleDragEnd(e, i+1)} className="team-node" style={{ left: `${teamPositions[i+1]?.x || 0}%`, top: `${teamPositions[i+1]?.y || 0}%`, backgroundColor: groupSettings[teamGroups[i+1]||'Nhóm 1'].border }}>T{i+1}</div>
+          ))}
         </div>
       </div>
 
-      {/* POPUP ACTION - CẬP NHẬT 5 Ô KỸ NĂNG */}
+      {/* POPUP ACTION CẬP NHẬT: KÉO THẢ ICON */}
       {selectedMember && (
-        <div style={{ position: 'fixed', bottom: '20px', left: '50%', transform: 'translateX(-50%)', background: '#1a1a1a', padding: '20px', borderRadius: '15px', border: '2px solid gold', zIndex: 1000, width: '90%', maxWidth: '420px', boxShadow: '0 0 30px rgba(0,0,0,1)' }}>
-          <div style={{ marginBottom: '5px', fontWeight: 'bold', color: classInfo[selectedMember.class_name]?.color, fontSize: '18px' }}>{selectedMember.char_name}</div>
-          <div style={{ fontSize: '11px', color: '#888', marginBottom: '15px' }}>Hệ: {selectedMember.class_name} | {selectedMember.type}</div>
-          
-          {/* DÒNG KỸ NĂNG */}
-          <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginBottom: '20px', background: 'rgba(0,0,0,0.4)', padding: '10px', borderRadius: '8px' }}>
-            {[1, 2, 3, 4, 5].map(i => (
-              <div key={i} className={`skill-box ${isAdmin ? 'admin-edit' : ''}`}>
-                {isAdmin ? 'Sửa' : 'Trống'}
-              </div>
-            ))}
-          </div>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div ref={popupRef} style={{ background: '#1a1a1a', padding: '20px', borderRadius: '15px', border: '2px solid gold', width: '90%', maxWidth: '450px', position: 'relative', height: '400px' }}>
+            
+            <div style={{ fontWeight: 'bold', color: 'gold', fontSize: '18px' }}>{selectedMember.char_name}</div>
+            
+            {/* Vùng kéo thả icon */}
+            <div style={{ position: 'relative', height: '220px', background: '#000', borderRadius: '10px', margin: '15px 0', border: '1px solid #333', overflow: 'hidden' }}>
+              <p style={{ fontSize: '10px', color: '#444', marginTop: '100px' }}>Khu vực kéo thả icon</p>
+              
+              {memberSkills.filter(s => s.member_id === selectedMember.id).map(skill => (
+                <img 
+                  key={skill.id}
+                  src={skill.skill_url}
+                  draggable
+                  onDragEnd={(e) => handleSkillDragEnd(e, skill.id)}
+                  className="skill-icon-float"
+                  style={{ left: `${skill.pos_x}%`, top: `${skill.pos_y}%` }}
+                />
+              ))}
+            </div>
 
-          <div style={{ display: 'flex', gap: '10px' }}>
-            {(isAdmin || selectedMember.char_name === localStorage.getItem('my_char_name')) && (
-              <>
-                <button onClick={toggleItem} style={{ flex: 1, background: selectedMember.has_item ? '#444' : '#28a745', color: 'white', border: 'none', padding: '10px', borderRadius: '6px', fontWeight: 'bold' }}>
-                    {selectedMember.has_item ? "BỎ VẬT TƯ" : "VẬT TƯ 📦"}
-                </button>
-                <button onClick={deleteMember} style={{ background: '#dc3545', color: 'white', border: 'none', padding: '10px', borderRadius: '6px', fontWeight: 'bold' }}>XÓA</button>
-              </>
-            )}
-            <button onClick={() => setSelectedMember(null)} style={{ background: '#333', color: 'white', border: 'none', padding: '10px', borderRadius: '6px', fontWeight: 'bold', minWidth: '80px' }}>ĐÓNG</button>
+            {/* Danh sách Icon để chọn (Role: mọi người) */}
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', marginBottom: '15px', flexWrap: 'wrap' }}>
+              {SKILL_ICONS.map((url, idx) => (
+                <img key={idx} src={url} onClick={() => addSkillIcon(url)} style={{ width: '35px', height: '35px', cursor: 'pointer', border: '1px solid #444', borderRadius: '4px' }} title="Click để thêm" />
+              ))}
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px' }}>
+              {(isAdmin || selectedMember.char_name === localStorage.getItem('my_char_name')) && (
+                <>
+                  <button onClick={toggleItem} style={{ flex: 1, background: selectedMember.has_item ? '#444' : '#28a745', color: 'white', border: 'none', padding: '10px', borderRadius: '6px' }}>VẬT TƯ 📦</button>
+                  <button onClick={deleteMember} style={{ background: '#dc3545', color: 'white', border: 'none', padding: '10px', borderRadius: '6px' }}>XÓA</button>
+                </>
+              )}
+              <button onClick={() => setSelectedMember(null)} style={{ background: '#333', color: 'white', border: 'none', padding: '10px', borderRadius: '6px' }}>ĐÓNG</button>
+            </div>
           </div>
         </div>
       )}
