@@ -33,7 +33,7 @@ const groupSettings = {
   'Nhóm 4': { bg: 'rgba(255, 69, 0, 0.15)', border: '#ff4500', label: '#ff4500' },
 };
 
-// COMPONENT POP-UP (SỬA THÀNH CLICK ĐỂ CHỌN)
+// COMPONENT POP-UP
 const MemberDetailPopup = ({ 
   selectedMember, 
   setSelectedMember, 
@@ -77,7 +77,7 @@ const MemberDetailPopup = ({
 
         {/* 2. VÙNG TRANG BỊ */}
         <div style={{ padding: '20px', background: '#000', borderRadius: '12px', border: '1px solid #333' }}>
-          <div style={{ fontSize: '11px', color: '#444', marginBottom: '15px', textAlign: 'center' }}>Kỹ năng đã chọn</div>
+          <div style={{ fontSize: '11px', color: '#444', marginBottom: '15px', textAlign: 'center' }}>Kỹ năng đã chọn (Click dấu × để gỡ)</div>
           
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '15px', justifyItems: 'center' }}>
             {slots.map(slotIdx => {
@@ -86,8 +86,8 @@ const MemberDetailPopup = ({
                 <div 
                   key={slotIdx}
                   style={{ 
-                    width: '60px', 
-                    height: '60px', 
+                    width: '65px', 
+                    height: '65px', 
                     background: '#111', 
                     border: '2px dashed #333', 
                     borderRadius: '8px',
@@ -104,32 +104,34 @@ const MemberDetailPopup = ({
                         style={{ width: '100%', height: '100%', borderRadius: '6px', border: '1px solid gold' }}
                         alt="equipped"
                       />
-                      {/* NÚT X NHỎ ĐỂ XÓA */}
-                      <div 
-                        onClick={() => deleteSkill(skillInSlot.id)}
-                        style={{
-                          position: 'absolute',
-                          top: '-8px',
-                          right: '-8px',
-                          background: 'red',
-                          color: 'white',
-                          width: '18px',
-                          height: '18px',
-                          borderRadius: '50%',
-                          fontSize: '12px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          cursor: 'pointer',
-                          fontWeight: 'bold',
-                          border: '1px solid white'
-                        }}
-                      >
-                        ×
-                      </div>
+                      {(isAdmin || selectedMember.char_name === localStorage.getItem('my_char_name')) && (
+                        <div 
+                          onClick={() => deleteSkill(skillInSlot.id)}
+                          style={{
+                            position: 'absolute',
+                            top: '-8px',
+                            right: '-8px',
+                            background: 'red',
+                            color: 'white',
+                            width: '20px',
+                            height: '20px',
+                            borderRadius: '50%',
+                            fontSize: '14px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            cursor: 'pointer',
+                            fontWeight: 'bold',
+                            border: '1px solid white',
+                            zIndex: 10
+                          }}
+                        >
+                          ×
+                        </div>
+                      )}
                     </>
                   ) : (
-                    <span style={{ color: '#222', fontSize: '20px' }}>+</span>
+                    <span style={{ color: '#222', fontSize: '24px' }}>+</span>
                   )}
                 </div>
               );
@@ -192,14 +194,16 @@ function App() {
     return () => supabase.removeChannel(channel);
   }, [fetchData]);
 
-  // HÀM XỬ LÝ KHI CLICK CHỌN SKILL
   const handleSelectSkill = async (skillUrl) => {
     if (!selectedMember) return;
+    
+    // Chỉ cho phép chủ sở hữu hoặc admin sửa
+    if (!isAdmin && selectedMember.char_name !== localStorage.getItem('my_char_name')) {
+      return alert("Bạn không có quyền sửa kỹ năng của người khác!");
+    }
 
-    // Lấy danh sách skill hiện tại của member này
     const equipped = memberSkills.filter(s => s.member_id === selectedMember.id);
     
-    // Tìm ô trống đầu tiên (từ 0 đến 5)
     let targetSlot = -1;
     for (let i = 0; i <= 5; i++) {
       if (!equipped.find(s => parseInt(s.pos_x) === i)) {
@@ -212,7 +216,6 @@ function App() {
       return alert("Đã đầy 6 ô kỹ năng!");
     }
 
-    // Thêm vào database
     const { error } = await supabase.from('member_skills').insert([{ 
       member_id: selectedMember.id, 
       skill_url: skillUrl, 
@@ -388,8 +391,7 @@ function App() {
         )}
       </div>
 
-      <img src="/nth-logo.png" alt="Logo" style={{ width: '60px', margin: '0 auto', display: 'block' }} />
-      <h1 style={{ color: 'gold', fontSize: '20px', margin: '10px 0' }}>BANG QUỶ MÔN QUAN</h1>
+      <h1 style={{ color: 'gold', fontSize: '20px', margin: '20px 0' }}>BANG QUỶ MÔN QUAN</h1>
 
       <div style={{ display: 'flex', justifyContent: 'center', gap: '5px', background: '#0a0a0a', padding: '10px', borderRadius: '8px', border: '1px solid #222', marginBottom: '15px', flexWrap: 'wrap' }}>
         {Object.keys(classInfo).map(cls => (
