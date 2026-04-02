@@ -23,7 +23,6 @@ const groupSettings = {
   'Nhóm 4': { bg: 'rgba(255, 69, 0, 0.15)', border: '#ff4500', label: '#ff4500' },
 };
 
-// Khai báo danh sách icon kỹ năng mẫu
 const SKILL_LIBRARY = [
   "https://i.postimg.cc/DfDDfmVs/Screenshot-2026-04-02-232308.png",
   "https://i.postimg.cc/nV55VM8m/Screenshot-2026-04-02-232315.png",
@@ -43,7 +42,10 @@ function App() {
   const [form, setForm] = useState({ char_name: '', class_name: 'Toái Mộng', team_slot: null, type: 'Chính thức' });
   const [teamGroups, setTeamGroups] = useState({});
   const [teamPositions, setTeamPositions] = useState({});
-  const [memberSkills, setMemberSkills] = useState([]); // State lưu trữ kỹ năng
+  const [memberSkills, setMemberSkills] = useState([]);
+  
+  // --- STATE MỚI CHO TÍNH NĂNG TẢI ẢNH ---
+  const [customSkillUrl, setCustomSkillUrl] = useState('');
 
   const mapRef = useRef(null);
 
@@ -54,7 +56,7 @@ function App() {
     const { data: skills } = await supabase.from('member_skills').select('*');
 
     if (mems) setMembers(mems);
-    if (skills) setMemberSkills(skills); // Cập nhật danh sách kỹ năng vào state
+    if (skills) setMemberSkills(skills); 
     if (groups) {
       const groupMap = Object.fromEntries(groups.map(g => [g.team_id, g.group_name]));
       setTeamGroups(groupMap);
@@ -130,15 +132,12 @@ function App() {
   const handleSlotClick = async (type, slotNum) => {
     const occupant = members.find(m => m.type === type && m.team_slot === slotNum);
     
-    // Tối ưu Admin hoán đổi: Cập nhật UI trước (Optimistic)
     if (isAdmin && movingMember) {
       if (movingMember.type === type && movingMember.team_slot === slotNum) {
         setMovingMember(null);
         return;
       }
-
       if (occupant) {
-        // Hoán đổi 2 người
         setMembers(prev => prev.map(m => {
           if (m.id === movingMember.id) return { ...m, type: occupant.type, team_slot: occupant.team_slot };
           if (m.id === occupant.id) return { ...m, type: movingMember.type, team_slot: movingMember.team_slot };
@@ -149,7 +148,6 @@ function App() {
           supabase.from('register_list').update({ type: movingMember.type, team_slot: movingMember.team_slot }).eq('id', occupant.id)
         ]);
       } else {
-        // Di chuyển vào ô trống
         setMembers(prev => prev.map(m => 
           m.id === movingMember.id ? { ...m, type, team_slot: slotNum } : m
         ));
@@ -169,11 +167,10 @@ function App() {
   };
 
   const addSkill = async (url) => {
-    if (!selectedMember) return;
+    if (!selectedMember || !url) return;
     const currentSkills = memberSkills.filter(s => s.member_id === selectedMember.id);
     if (currentSkills.length >= 5) return alert("Tối đa 5 kỹ năng!");
     
-    // Tìm ô trống đầu tiên từ 0-4
     let slot = 0;
     for(let i=0; i<5; i++) {
       if(!currentSkills.find(s => parseInt(s.pos_x) === i)) {
@@ -182,7 +179,6 @@ function App() {
       }
     }
 
-    // Gửi lệnh insert lên Supabase
     const { error } = await supabase.from('member_skills').insert([{ 
       member_id: selectedMember.id, 
       skill_url: url, 
@@ -194,8 +190,22 @@ function App() {
       console.error("Lỗi thêm kỹ năng:", error);
       alert("Lỗi kết nối cơ sở dữ liệu!");
     } else {
-      fetchData(); // Tải lại dữ liệu để cập nhật UI
+      setCustomSkillUrl(''); // Reset ô nhập sau khi thêm
+      fetchData();
     }
+  };
+
+  // --- HÀM XỬ LÝ TẢI FILE ẢNH LÊN ---
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) return alert("Ảnh quá nặng! Vui lòng chọn ảnh < 2MB");
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      addSkill(reader.result); // Thêm chuỗi Base64 vào DB
+    };
+    reader.readAsDataURL(file);
   };
 
   const removeSkill = async (id) => {
@@ -235,7 +245,6 @@ function App() {
     const occupant = members.find(m => m.type === type && m.team_slot === slotNum);
     const isSelected = form.type === type && form.team_slot === slotNum;
     const isBeingMoved = movingMember && movingMember.id === occupant?.id;
-
     const isLeaderSlot = type === 'Chính thức' && (slotNum - 1) % 6 === 0;
 
     return (
@@ -280,14 +289,15 @@ function App() {
           touch-action: none;
         }
         .team-node:active { transform: translate(-50%, -50%) scale(1.2); z-index: 100; }
-        /* Tăng kích thước ô hiển thị kỹ năng trong popup lên 65px để chứa icon 60px */
         .skill-box { width: 65px; height: 65px; background: #222; border: 1px solid #444; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #555; position: relative; overflow: visible; }
-        /* Tăng kích thước icon thư viện lên 60px (tăng 50% so với 40px) */
         .skill-lib-item { width: 60px; height: 60px; cursor: pointer; border-radius: 6px; border: 1px solid #333; transition: transform 0.1s; }
         .skill-lib-item:hover { border-color: gold; transform: scale(1.1); }
+        .custom-add-skill { display: flex; gap: 5px; margin-top: 10px; padding: 0 10px; }
+        .custom-input { flex: 1; background: #000; border: 1px solid #444; color: white; padding: 6px; border-radius: 4px; fontSize: 11px; }
+        .upload-btn { background: #333; color: white; border: 1px solid #555; padding: 6px 10px; border-radius: 4px; cursor: pointer; fontSize: 11px; font-weight: bold; }
+        .add-btn { background: #d4af37; color: black; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; fontSize: 11px; font-weight: bold; }
       `}</style>
 
-      {/* ADMIN CONTROLS */}
       <div style={{ position: 'absolute', top: '10px', right: '10px', display: 'flex', flexDirection: 'column', gap: '5px', alignItems: 'flex-end', zIndex: 100 }}>
         <button onClick={handleAdminLogin} style={{ background: isAdmin ? '#d4af37' : 'transparent', color: isAdmin ? '#000' : '#d4af37', border: '1px solid #d4af37', padding: '5px 10px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>
           {isAdmin ? "ADMIN: ON" : "ADMIN LOGIN"}
@@ -305,7 +315,6 @@ function App() {
       <img src="/nth-logo.png" alt="Logo" style={{ width: '60px', margin: '0 auto', display: 'block' }} />
       <h1 style={{ color: 'gold', fontSize: '20px', margin: '10px 0' }}>BANG QUỶ MÔN QUAN</h1>
 
-      {/* CLASS STATS */}
       <div style={{ display: 'flex', justifyContent: 'center', gap: '5px', background: '#0a0a0a', padding: '10px', borderRadius: '8px', border: '1px solid #222', marginBottom: '15px', flexWrap: 'wrap' }}>
         {Object.keys(classInfo).map(cls => (
           <div key={cls} style={{ borderRight: '1px solid #222', paddingRight: '5px', minWidth: '60px' }}>
@@ -319,7 +328,6 @@ function App() {
         </div>
       </div>
       
-      {/* REGISTER FORM */}
       <form onSubmit={handleSubmit} style={{ marginBottom: '25px' }}>
         <input style={{ padding: '10px', background: '#111', color: 'white', border: '1px solid #333', borderRadius: '4px', width: '160px' }} placeholder="Tên..." value={form.char_name} onChange={e => setForm({...form, char_name: e.target.value})} required />
         <select style={{ padding: '10px', background: '#111', color: 'white', border: '1px solid #333', margin: '0 5px', borderRadius: '4px' }} value={form.class_name} onChange={e => setForm({...form, class_name: e.target.value})}>
@@ -330,7 +338,6 @@ function App() {
         </button>
       </form>
 
-      {/* MAIN TEAMS */}
       <div className="team-grid">
         {[...Array(10)].map((_, col) => {
           const teamNum = col + 1;
@@ -354,17 +361,14 @@ function App() {
       </div>
 
       <h2 style={{ color: '#87CEEB', fontSize: '15px', margin: '30px 0 10px 0' }}>DỰ BỊ (30)</h2>
-
       <div className="team-grid">
         {[...Array(30)].map((_, i) => renderSlotCell('Học việc', i + 1))}
       </div>
 
-      {/* MAP SECTION */}
       <div className="map-section">
         <h3 style={{ color: 'gold', margin: '0 0 5px 0', fontSize: '18px' }}>CHỈ ĐẠO CHIẾN THUẬT</h3>
         <div className="map-container" ref={mapRef}>
           <img src="https://i.postimg.cc/SsMMSZLG/unnam2ed.jpg" alt="Tactical Map" className="map-bg" />
-
           {[...Array(10)].map((_, i) => {
             const teamId = i + 1;
             const pos = teamPositions[teamId] || { x: 8 * teamId, y: 15 };
@@ -384,26 +388,38 @@ function App() {
         </div>
       </div>
 
-      {/* POPUP ACTION - ĐÃ CẬP NHẬT KÍCH THƯỚC ICON 60PX */}
       {selectedMember && (
         <div style={{ position: 'fixed', bottom: '20px', left: '50%', transform: 'translateX(-50%)', background: '#1a1a1a', padding: '20px', borderRadius: '15px', border: '2px solid gold', zIndex: 1000, width: '90%', maxWidth: '420px', boxShadow: '0 0 30px rgba(0,0,0,1)' }}>
           <div style={{ marginBottom: '5px', fontWeight: 'bold', color: classInfo[selectedMember.class_name]?.color, fontSize: '18px' }}>{selectedMember.char_name}</div>
           <div style={{ fontSize: '11px', color: '#888', marginBottom: '15px' }}>Hệ: {selectedMember.class_name} | {selectedMember.type}</div>
 
-          {/* CHỌN KỸ NĂNG */}
           <div style={{ marginBottom: '15px', background: '#222', padding: '10px', borderRadius: '8px' }}>
-            <div style={{ fontSize: '10px', color: 'gold', marginBottom: '8px' }}>CHỌN KỸ NĂNG ĐỂ THÊM </div>
+            <div style={{ fontSize: '10px', color: 'gold', marginBottom: '8px' }}>CHỌN HOẶC TẢI SKILL MỚI</div>
             <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap' }}>
               {SKILL_LIBRARY.map((url, index) => (
                 <img key={index} src={url} className="skill-lib-item" onClick={() => addSkill(url)} alt="skill" />
               ))}
             </div>
+
+            {/* --- KHU VỰC TÙY CHỈNH THÊM SKILL --- */}
+            <div className="custom-add-skill">
+              <input 
+                className="custom-input" 
+                placeholder="Dán link ảnh skill..." 
+                value={customSkillUrl}
+                onChange={(e) => setCustomSkillUrl(e.target.value)}
+              />
+              <button className="add-btn" onClick={() => addSkill(customSkillUrl)}>THÊM</button>
+              
+              <label className="upload-btn">
+                TẢI ẢNH
+                <input type="file" accept="image/*" hidden onChange={handleFileChange} />
+              </label>
+            </div>
           </div>
 
-          {/* DÒNG KỸ NĂNG ĐÃ CHỌN */}
           <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginBottom: '20px', background: 'rgba(0,0,0,0.4)', padding: '10px', borderRadius: '8px' }}>
             {[0, 1, 2, 3, 4].map(i => {
-              // Tìm kỹ năng của member này tại vị trí ô i
               const skill = memberSkills.find(s => s.member_id === selectedMember.id && parseInt(s.pos_x) === i);
               return (
                 <div key={i} className="skill-box">
