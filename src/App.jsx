@@ -39,12 +39,13 @@ function App() {
   const [isLimitEnabled, setIsLimitEnabled] = useState(true);
   const [movingMember, setMovingMember] = useState(null);
   const [selectedMember, setSelectedMember] = useState(null);
-  const [memberSkills, setMemberSkills] = useState([]); 
+  const [memberSkills, setMemberSkills] = useState([]); // State mới cho icon
   const [form, setForm] = useState({ char_name: '', class_name: 'Toái Mộng', team_slot: null, type: 'Chính thức' });
   const [teamGroups, setTeamGroups] = useState({});
   const [teamPositions, setTeamPositions] = useState({});
   const mapRef = useRef(null);
   const popupRef = useRef(null);
+  const dropZoneRef = useRef(null); // Ref cho vùng đen thả icon
 
   const fetchData = useCallback(async () => {
     const { data: mems } = await supabase.from('register_list').select('*');
@@ -75,39 +76,53 @@ function App() {
     return () => supabase.removeChannel(channel);
   }, [fetchData]);
 
-  // Hàm thêm icon mới vào pop-up
-  const addSkillIcon = async (url) => {
-    if (!selectedMember) return;
-    await supabase.from('member_skills').insert([{ 
-      member_id: selectedMember.id, 
-      skill_url: url, 
-      pos_x: 40 + Math.random() * 20, 
-      pos_y: 40 + Math.random() * 10 
-    }]);
-    fetchData(); // Thêm fetchData để cập nhật giao diện ngay
+  // --- LOGIC KÉO THẢ KHO KỸ NĂNG ---
+
+  // 1. Khi bắt đầu kéo từ kho (Dùng HTML5 Drag and Drop)
+  const handleStartDragFromLibrary = (e, url) => {
+    e.dataTransfer.setData("skillUrl", url);
   };
 
-  // Hàm cập nhật vị trí icon khi kéo thả
-  const handleSkillDragEnd = async (e, skillId) => {
-    if (!popupRef.current) return;
-    const rect = popupRef.current.getBoundingClientRect();
-    // Tính toán tọa độ dựa trên vùng chứa màu đen bên trong popup
-    const container = e.target.parentElement.getBoundingClientRect();
-    const x = ((e.clientX - container.left) / container.width) * 100;
-    const y = ((e.clientY - container.top) / container.height) * 100;
-    
+  // 2. Thả vào vùng đen (Vùng chèn mới hoặc cập nhật vị trí)
+  const handleDropOnZone = async (e) => {
+    e.preventDefault();
+    if (!selectedMember || !dropZoneRef.current) return;
+
+    const rect = dropZoneRef.current.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 100;
+    const y = ((e.clientY - rect.top) / rect.height) * 100;
     const safeX = Math.max(5, Math.min(95, x));
     const safeY = Math.max(5, Math.min(95, y));
 
-    await supabase.from('member_skills').update({ pos_x: safeX, pos_y: safeY }).eq('id', skillId);
+    const skillUrl = e.dataTransfer.getData("skillUrl");
+    const skillId = e.dataTransfer.getData("skillId");
+
+    if (skillUrl) {
+      // Nếu có URL -> Đây là kéo từ KHO vào (thêm mới)
+      await supabase.from('member_skills').insert([{ 
+        member_id: selectedMember.id, 
+        skill_url: skillUrl, 
+        pos_x: safeX, 
+        pos_y: safeY 
+      }]);
+    } else if (skillId) {
+      // Nếu có ID -> Đây là kéo icon ĐÃ CÓ trong vùng đen để đổi chỗ
+      await supabase.from('member_skills').update({ pos_x: safeX, pos_y: safeY }).eq('id', skillId);
+    }
     fetchData();
   };
 
-  // Hàm xóa kỹ năng khi click chuột phải hoặc double click
+  // 3. Khi bắt đầu kéo icon đã có sẵn trong vùng đen
+  const handleStartDragExisting = (e, skillId) => {
+    e.dataTransfer.setData("skillId", skillId);
+  };
+
   const deleteSkill = async (skillId) => {
     await supabase.from('member_skills').delete().eq('id', skillId);
     fetchData();
   };
+
+  // --- KẾT THÚC LOGIC KÉO THẢ ---
 
   const updateTeamPosition = async (teamId, x, y) => {
     setTeamPositions(prev => ({ ...prev, [teamId]: { x, y } }));
@@ -252,9 +267,12 @@ function App() {
         .map-container { position: relative; width: 100%; border-radius: 8px; overflow: hidden; border: 2px solid #444; margin-top: 15px; }
         .map-bg { width: 100%; display: block; opacity: 0.8; pointer-events: none; -webkit-user-drag: none; }
         .team-node { position: absolute; width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; color: #000; cursor: move; transform: translate(-50%, -50%); border: 2px solid #fff; box-shadow: 0 0 15px rgba(0,0,0,0.8); z-index: 10; touch-action: none; }
-        .skill-icon-float { position: absolute; width: 40px; height: 40px; transform: translate(-50%, -50%); cursor: move; z-index: 5; border-radius: 4px; box-shadow: 0 0 5px gold; border: 1px solid gold; }
+        .skill-icon-float { position: absolute; width: 40px; height: 40px; transform: translate(-50%, -50%); cursor: move; z-index: 5; border-radius: 4px; box-shadow: 0 0 10px gold; border: 1px solid gold; background: #000; }
+        .skill-library-icon { width: 45px; height: 45px; cursor: grab; border: 1px solid #444; border-radius: 6px; transition: 0.2s; background: #111; }
+        .skill-library-icon:hover { border-color: gold; transform: scale(1.1); }
       `}</style>
 
+      {/* ADMIN CONTROLS */}
       <div style={{ position: 'absolute', top: '10px', right: '10px', display: 'flex', flexDirection: 'column', gap: '5px', alignItems: 'flex-end', zIndex: 100 }}>
         <button onClick={handleAdminLogin} style={{ background: isAdmin ? '#d4af37' : 'transparent', color: isAdmin ? '#000' : '#d4af37', border: '1px solid #d4af37', padding: '5px 10px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>
           {isAdmin ? "ADMIN: ON" : "ADMIN LOGIN"}
@@ -321,20 +339,28 @@ function App() {
       </div>
 
       {selectedMember && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div ref={popupRef} style={{ background: '#1a1a1a', padding: '20px', borderRadius: '15px', border: '2px solid gold', width: '90%', maxWidth: '450px', position: 'relative', height: '450px' }}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div ref={popupRef} style={{ background: '#111', padding: '20px', borderRadius: '20px', border: '2px solid gold', width: '95%', maxWidth: '500px', boxShadow: '0 0 30px rgba(212, 175, 55, 0.3)' }}>
             
-            <div style={{ fontWeight: 'bold', color: 'gold', fontSize: '18px' }}>{selectedMember.char_name}</div>
-            
-            <div style={{ position: 'relative', height: '240px', background: '#000', borderRadius: '10px', margin: '15px 0', border: '1px solid #333', overflow: 'hidden' }}>
-              <p style={{ fontSize: '10px', color: '#444', position: 'absolute', width: '100%', top: '50%', transform: 'translateY(-50%)' }}>Kéo thả icon để thay đổi vị trí<br/>Double click để xóa icon</p>
+            <div style={{ fontWeight: 'bold', color: 'gold', fontSize: '22px', textShadow: '0 0 10px rgba(255,215,0,0.5)', marginBottom: '10px' }}>
+              {selectedMember.char_name}
+            </div>
+
+            {/* VÙNG ĐEN: NƠI THẢ ICON XUỐNG */}
+            <div 
+              ref={dropZoneRef}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={handleDropOnZone}
+              style={{ position: 'relative', height: '260px', background: '#000', borderRadius: '12px', border: '2px dashed #333', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            >
+              <div style={{ fontSize: '11px', color: '#444', pointerEvents: 'none' }}>Kéo Icon từ kho và thả vào đây</div>
               
               {memberSkills.filter(s => s.member_id === selectedMember.id).map(skill => (
                 <img 
                   key={skill.id}
                   src={skill.skill_url}
                   draggable
-                  onDragEnd={(e) => handleSkillDragEnd(e, skill.id)}
+                  onDragStart={(e) => handleStartDragExisting(e, skill.id)}
                   onDoubleClick={() => deleteSkill(skill.id)}
                   className="skill-icon-float"
                   style={{ left: `${skill.pos_x}%`, top: `${skill.pos_y}%` }}
@@ -342,20 +368,30 @@ function App() {
               ))}
             </div>
 
-            <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', marginBottom: '15px', flexWrap: 'wrap' }}>
-              {SKILL_ICONS.map((url, idx) => (
-                <img key={idx} src={url} onClick={() => addSkillIcon(url)} style={{ width: '35px', height: '35px', cursor: 'pointer', border: '1px solid #444', borderRadius: '4px' }} title="Click để thêm" />
-              ))}
+            {/* KHO KỸ NĂNG: NƠI CHỨA ICON GỐC */}
+            <div style={{ marginTop: '20px', padding: '15px', background: '#1a1a1a', borderRadius: '10px', border: '1px solid #333' }}>
+              <div style={{ fontSize: '12px', color: 'gold', marginBottom: '10px', fontWeight: 'bold' }}>KHO KỸ NĂNG (Kéo icon xuống)</div>
+              <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                {SKILL_ICONS.map((url, idx) => (
+                  <img 
+                    key={idx} 
+                    src={url} 
+                    draggable
+                    onDragStart={(e) => handleStartDragFromLibrary(e, url)}
+                    className="skill-library-icon"
+                  />
+                ))}
+              </div>
             </div>
 
-            <div style={{ display: 'flex', gap: '10px' }}>
+            <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
               {(isAdmin || selectedMember.char_name === localStorage.getItem('my_char_name')) && (
                 <>
-                  <button onClick={toggleItem} style={{ flex: 1, background: selectedMember.has_item ? '#444' : '#28a745', color: 'white', border: 'none', padding: '10px', borderRadius: '6px' }}>VẬT TƯ 📦</button>
-                  <button onClick={deleteMember} style={{ background: '#dc3545', color: 'white', border: 'none', padding: '10px', borderRadius: '6px' }}>XÓA</button>
+                  <button onClick={toggleItem} style={{ flex: 1, background: selectedMember.has_item ? '#444' : '#28a745', color: 'white', border: 'none', padding: '12px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>VẬT TƯ 📦</button>
+                  <button onClick={deleteMember} style={{ background: '#dc3545', color: 'white', border: 'none', padding: '12px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>XÓA</button>
                 </>
               )}
-              <button onClick={() => setSelectedMember(null)} style={{ background: '#333', color: 'white', border: 'none', padding: '10px', borderRadius: '6px' }}>ĐÓNG</button>
+              <button onClick={() => setSelectedMember(null)} style={{ background: '#333', color: 'white', border: 'none', padding: '12px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>ĐÓNG</button>
             </div>
           </div>
         </div>
