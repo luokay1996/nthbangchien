@@ -6,7 +6,7 @@ const supabase = createClient(
   import.meta.env.VITE_SUPABASE_ANON_KEY
 );
 
-// Danh sách các Icon bạn đã gửi
+// Danh sách các Icon
 const SKILL_ICONS = [
   "https://i.postimg.cc/DfDDfmVs/Screenshot-2026-04-02-232308.png",
   "https://i.postimg.cc/nV55VM8m/Screenshot-2026-04-02-232315.png",
@@ -33,7 +33,7 @@ const groupSettings = {
   'Nhóm 4': { bg: 'rgba(255, 69, 0, 0.15)', border: '#ff4500', label: '#ff4500' },
 };
 
-// COMPONENT POP-UP TÁCH RIÊNG (SỬA LẠI THÀNH 6 Ô CỐ ĐỊNH)
+// COMPONENT POP-UP
 const MemberDetailPopup = ({ 
   selectedMember, 
   setSelectedMember, 
@@ -70,15 +70,14 @@ const MemberDetailPopup = ({
                 draggable
                 onDragStart={(e) => handleStartDragFromLibrary(e, url)}
                 className="skill-library-icon"
+                style={{ width: '45px', height: '45px', cursor: 'grab', border: '1px solid #444', borderRadius: '6px' }}
               />
             ))}
           </div>
         </div>
 
-        {/* 2. VÙNG TRANG BỊ: 6 Ô CỐ ĐỊNH */}
-        <div 
-          style={{ padding: '20px', background: '#000', borderRadius: '12px', border: '1px solid #333' }}
-        >
+        {/* 2. VÙNG TRANG BỊ */}
+        <div style={{ padding: '20px', background: '#000', borderRadius: '12px', border: '1px solid #333' }}>
           <div style={{ fontSize: '11px', color: '#444', marginBottom: '15px', textAlign: 'center' }}>Kéo Icon vào các ô để trang bị</div>
           
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '15px', justifyItems: 'center' }}>
@@ -141,8 +140,6 @@ function App() {
   const [teamGroups, setTeamGroups] = useState({});
   const [teamPositions, setTeamPositions] = useState({});
   const mapRef = useRef(null);
-  const popupRef = useRef(null);
-  const dropZoneRef = useRef(null); 
 
   const fetchData = useCallback(async () => {
     const { data: mems } = await supabase.from('register_list').select('*');
@@ -173,18 +170,21 @@ function App() {
     return () => supabase.removeChannel(channel);
   }, [fetchData]);
 
+  // SỬA LỖI: Sử dụng text/plain để tương thích tốt hơn
   const handleStartDragFromLibrary = (e, url) => {
-    e.dataTransfer.setData("skillUrl", url);
+    e.dataTransfer.setData("text/plain", url);
+    e.dataTransfer.effectAllowed = "copy";
   };
 
+  // SỬA LỖI: Ngăn chặn mặc định và lấy data chuẩn
   const handleDropOnSlot = async (e, slotIdx) => {
     e.preventDefault();
+    e.stopPropagation();
     if (!selectedMember) return;
 
-    const skillUrl = e.dataTransfer.getData("skillUrl");
-    if (!skillUrl) return;
+    const skillUrl = e.dataTransfer.getData("text/plain");
+    if (!skillUrl || !skillUrl.startsWith('http')) return;
 
-    // Kiểm tra ô này đã có skill chưa
     const existing = memberSkills.find(s => s.member_id === selectedMember.id && parseInt(s.pos_x) === slotIdx);
 
     if (existing) {
@@ -348,12 +348,9 @@ function App() {
         .map-container { position: relative; width: 100%; border-radius: 8px; overflow: hidden; border: 2px solid #444; margin-top: 15px; }
         .map-bg { width: 100%; display: block; opacity: 0.8; pointer-events: none; -webkit-user-drag: none; }
         .team-node { position: absolute; width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; color: #000; cursor: move; transform: translate(-50%, -50%); border: 2px solid #fff; box-shadow: 0 0 15px rgba(0,0,0,0.8); z-index: 10; touch-action: none; }
-        .skill-icon-float { position: absolute; width: 40px; height: 40px; transform: translate(-50%, -50%); cursor: move; z-index: 5; border-radius: 4px; box-shadow: 0 0 10px gold; border: 1px solid gold; background: #000; }
-        .skill-library-icon { width: 45px; height: 45px; cursor: grab; border: 1px solid #444; border-radius: 6px; transition: 0.2s; background: #111; }
-        .skill-library-icon:hover { border-color: gold; transform: scale(1.1); }
+        .skill-library-icon:hover { border-color: gold; transform: scale(1.1); transition: 0.2s; }
       `}</style>
 
-      {/* ADMIN CONTROLS */}
       <div style={{ position: 'absolute', top: '10px', right: '10px', display: 'flex', flexDirection: 'column', gap: '5px', alignItems: 'flex-end', zIndex: 100 }}>
         <button onClick={handleAdminLogin} style={{ background: isAdmin ? '#d4af37' : 'transparent', color: isAdmin ? '#000' : '#d4af37', border: '1px solid #d4af37', padding: '5px 10px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>
           {isAdmin ? "ADMIN: ON" : "ADMIN LOGIN"}
@@ -431,7 +428,6 @@ function App() {
         deleteMember={deleteMember}
         isAdmin={isAdmin}
       />
-
     </div>
   );
 }
