@@ -6,7 +6,7 @@ const supabase = createClient(
   import.meta.env.VITE_SUPABASE_ANON_KEY
 );
 
-// Danh sách các Icon
+// Danh sách các Icon kỹ năng
 const SKILL_ICONS = [
   "https://i.postimg.cc/DfDDfmVs/Screenshot-2026-04-02-232308.png",
   "https://i.postimg.cc/nV55VM8m/Screenshot-2026-04-02-232315.png",
@@ -33,14 +33,13 @@ const groupSettings = {
   'Nhóm 4': { bg: 'rgba(255, 69, 0, 0.15)', border: '#ff4500', label: '#ff4500' },
 };
 
-// COMPONENT POP-UP
+// COMPONENT POP-UP (SỬA THÀNH CLICK ĐỂ CHỌN)
 const MemberDetailPopup = ({ 
   selectedMember, 
   setSelectedMember, 
   memberSkills, 
   SKILL_ICONS, 
-  handleDropOnSlot, 
-  handleStartDragFromLibrary, 
+  handleSelectSkill, 
   deleteSkill, 
   toggleItem, 
   deleteMember, 
@@ -61,16 +60,16 @@ const MemberDetailPopup = ({
 
         {/* 1. KHO KỸ NĂNG */}
         <div style={{ marginBottom: '20px', padding: '15px', background: '#1a1a1a', borderRadius: '10px', border: '1px solid #333' }}>
-          <div style={{ fontSize: '12px', color: 'gold', marginBottom: '10px', fontWeight: 'bold', textAlign: 'center' }}>KHO KỸ NĂNG (Kéo icon xuống)</div>
+          <div style={{ fontSize: '12px', color: 'gold', marginBottom: '10px', fontWeight: 'bold', textAlign: 'center' }}>KHO KỸ NĂNG (Click để thêm)</div>
           <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
             {SKILL_ICONS.map((url, idx) => (
               <img 
                 key={idx} 
                 src={url} 
-                draggable
-                onDragStart={(e) => handleStartDragFromLibrary(e, url)}
+                onClick={() => handleSelectSkill(url)}
                 className="skill-library-icon"
-                style={{ width: '45px', height: '45px', cursor: 'grab', border: '1px solid #444', borderRadius: '6px' }}
+                style={{ width: '45px', height: '45px', cursor: 'pointer', border: '1px solid #444', borderRadius: '6px' }}
+                alt="skill"
               />
             ))}
           </div>
@@ -78,7 +77,7 @@ const MemberDetailPopup = ({
 
         {/* 2. VÙNG TRANG BỊ */}
         <div style={{ padding: '20px', background: '#000', borderRadius: '12px', border: '1px solid #333' }}>
-          <div style={{ fontSize: '11px', color: '#444', marginBottom: '15px', textAlign: 'center' }}>Kéo Icon vào các ô để trang bị</div>
+          <div style={{ fontSize: '11px', color: '#444', marginBottom: '15px', textAlign: 'center' }}>Kỹ năng đã chọn</div>
           
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '15px', justifyItems: 'center' }}>
             {slots.map(slotIdx => {
@@ -86,8 +85,6 @@ const MemberDetailPopup = ({
               return (
                 <div 
                   key={slotIdx}
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={(e) => handleDropOnSlot(e, slotIdx)}
                   style={{ 
                     width: '60px', 
                     height: '60px', 
@@ -101,11 +98,36 @@ const MemberDetailPopup = ({
                   }}
                 >
                   {skillInSlot ? (
-                    <img 
-                      src={skillInSlot.skill_url}
-                      onDoubleClick={() => deleteSkill(skillInSlot.id)}
-                      style={{ width: '100%', height: '100%', borderRadius: '6px', border: '1px solid gold', cursor: 'pointer' }}
-                    />
+                    <>
+                      <img 
+                        src={skillInSlot.skill_url}
+                        style={{ width: '100%', height: '100%', borderRadius: '6px', border: '1px solid gold' }}
+                        alt="equipped"
+                      />
+                      {/* NÚT X NHỎ ĐỂ XÓA */}
+                      <div 
+                        onClick={() => deleteSkill(skillInSlot.id)}
+                        style={{
+                          position: 'absolute',
+                          top: '-8px',
+                          right: '-8px',
+                          background: 'red',
+                          color: 'white',
+                          width: '18px',
+                          height: '18px',
+                          borderRadius: '50%',
+                          fontSize: '12px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          cursor: 'pointer',
+                          fontWeight: 'bold',
+                          border: '1px solid white'
+                        }}
+                      >
+                        ×
+                      </div>
+                    </>
                   ) : (
                     <span style={{ color: '#222', fontSize: '20px' }}>+</span>
                   )}
@@ -170,34 +192,35 @@ function App() {
     return () => supabase.removeChannel(channel);
   }, [fetchData]);
 
-  // SỬA LỖI: Sử dụng text/plain để tương thích tốt hơn
-  const handleStartDragFromLibrary = (e, url) => {
-    e.dataTransfer.setData("text/plain", url);
-    e.dataTransfer.effectAllowed = "copy";
-  };
-
-  // SỬA LỖI: Ngăn chặn mặc định và lấy data chuẩn
-  const handleDropOnSlot = async (e, slotIdx) => {
-    e.preventDefault();
-    e.stopPropagation();
+  // HÀM XỬ LÝ KHI CLICK CHỌN SKILL
+  const handleSelectSkill = async (skillUrl) => {
     if (!selectedMember) return;
 
-    const skillUrl = e.dataTransfer.getData("text/plain");
-    if (!skillUrl || !skillUrl.startsWith('http')) return;
-
-    const existing = memberSkills.find(s => s.member_id === selectedMember.id && parseInt(s.pos_x) === slotIdx);
-
-    if (existing) {
-      await supabase.from('member_skills').update({ skill_url: skillUrl }).eq('id', existing.id);
-    } else {
-      await supabase.from('member_skills').insert([{ 
-        member_id: selectedMember.id, 
-        skill_url: skillUrl, 
-        pos_x: slotIdx, 
-        pos_y: 0 
-      }]);
+    // Lấy danh sách skill hiện tại của member này
+    const equipped = memberSkills.filter(s => s.member_id === selectedMember.id);
+    
+    // Tìm ô trống đầu tiên (từ 0 đến 5)
+    let targetSlot = -1;
+    for (let i = 0; i <= 5; i++) {
+      if (!equipped.find(s => parseInt(s.pos_x) === i)) {
+        targetSlot = i;
+        break;
+      }
     }
-    fetchData();
+
+    if (targetSlot === -1) {
+      return alert("Đã đầy 6 ô kỹ năng!");
+    }
+
+    // Thêm vào database
+    const { error } = await supabase.from('member_skills').insert([{ 
+      member_id: selectedMember.id, 
+      skill_url: skillUrl, 
+      pos_x: targetSlot, 
+      pos_y: 0 
+    }]);
+
+    if (!error) fetchData();
   };
 
   const deleteSkill = async (skillId) => {
@@ -421,8 +444,7 @@ function App() {
         setSelectedMember={setSelectedMember}
         memberSkills={memberSkills}
         SKILL_ICONS={SKILL_ICONS}
-        handleDropOnSlot={handleDropOnSlot}
-        handleStartDragFromLibrary={handleStartDragFromLibrary}
+        handleSelectSkill={handleSelectSkill}
         deleteSkill={deleteSkill}
         toggleItem={toggleItem}
         deleteMember={deleteMember}
