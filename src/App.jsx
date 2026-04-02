@@ -280,8 +280,10 @@ function App() {
           touch-action: none;
         }
         .team-node:active { transform: translate(-50%, -50%) scale(1.2); z-index: 100; }
-        .skill-box { width: 45px; height: 45px; background: #222; border: 1px solid #444; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 8px; color: #555; position: relative; overflow: visible; }
-        .skill-lib-item { width: 40px; height: 40px; cursor: pointer; border-radius: 4px; border: 1px solid #333; }
+        /* Tăng kích thước ô hiển thị kỹ năng trong popup lên 65px để chứa icon 60px */
+        .skill-box { width: 65px; height: 65px; background: #222; border: 1px solid #444; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #555; position: relative; overflow: visible; }
+        /* Tăng kích thước icon thư viện lên 60px (tăng 50% so với 40px) */
+        .skill-lib-item { width: 60px; height: 60px; cursor: pointer; border-radius: 6px; border: 1px solid #333; transition: transform 0.1s; }
         .skill-lib-item:hover { border-color: gold; transform: scale(1.1); }
       `}</style>
 
@@ -382,7 +384,7 @@ function App() {
         </div>
       </div>
 
-      {/* POPUP ACTION - CẬP NHẬT 5 Ô KỸ NĂNG */}
+      {/* POPUP ACTION - ĐÃ CẬP NHẬT KÍCH THƯỚC ICON 60PX */}
       {selectedMember && (
         <div style={{ position: 'fixed', bottom: '20px', left: '50%', transform: 'translateX(-50%)', background: '#1a1a1a', padding: '20px', borderRadius: '15px', border: '2px solid gold', zIndex: 1000, width: '90%', maxWidth: '420px', boxShadow: '0 0 30px rgba(0,0,0,1)' }}>
           <div style={{ marginBottom: '5px', fontWeight: 'bold', color: classInfo[selectedMember.class_name]?.color, fontSize: '18px' }}>{selectedMember.char_name}</div>
@@ -390,7 +392,7 @@ function App() {
 
           {/* CHỌN KỸ NĂNG */}
           <div style={{ marginBottom: '15px', background: '#222', padding: '10px', borderRadius: '8px' }}>
-            <div style={{ fontSize: '10px', color: 'gold', marginBottom: '8px' }}>CHỌN KỸ NĂNG ĐỂ THÊM</div>
+            <div style={{ fontSize: '10px', color: 'gold', marginBottom: '8px' }}>CHỌN KỸ NĂNG ĐỂ THÊM (PHÓNG TO 50%)</div>
             <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap' }}>
               {SKILL_LIBRARY.map((url, index) => (
                 <img key={index} src={url} className="skill-lib-item" onClick={() => addSkill(url)} alt="skill" />
@@ -407,8 +409,8 @@ function App() {
                 <div key={i} className="skill-box">
                   {skill ? (
                     <>
-                      <img src={skill.skill_url} style={{ width: '100%', height: '100%', borderRadius: '5px' }} alt="equipped" />
-                      <div onClick={() => removeSkill(skill.id)} style={{ position: 'absolute', top: '-5px', right: '-5px', background: 'red', color: 'white', width: '15px', height: '15px', borderRadius: '50%', fontSize: '10px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', border: '1px solid white' }}>×</div>
+                      <img src={skill.skill_url} style={{ width: '100%', height: '100%', borderRadius: '6px' }} alt="equipped" />
+                      <div onClick={() => removeSkill(skill.id)} style={{ position: 'absolute', top: '-5px', right: '-5px', background: 'red', color: 'white', width: '18px', height: '18px', borderRadius: '50%', fontSize: '11px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', border: '1px solid white' }}>×</div>
                     </>
                   ) : 'Trống'}
                 </div>
