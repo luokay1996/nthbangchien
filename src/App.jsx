@@ -54,7 +54,7 @@ function App() {
     const { data: skills } = await supabase.from('member_skills').select('*');
 
     if (mems) setMembers(mems);
-    if (skills) setMemberSkills(skills);
+    if (skills) setMemberSkills(skills); // Cập nhật danh sách kỹ năng vào state
     if (groups) {
       const groupMap = Object.fromEntries(groups.map(g => [g.team_id, g.group_name]));
       setTeamGroups(groupMap);
@@ -182,13 +182,20 @@ function App() {
       }
     }
 
-    await supabase.from('member_skills').insert([{ 
+    // Gửi lệnh insert lên Supabase
+    const { error } = await supabase.from('member_skills').insert([{ 
       member_id: selectedMember.id, 
       skill_url: url, 
       pos_x: slot, 
       pos_y: 0 
     }]);
-    fetchData();
+
+    if (error) {
+      console.error("Lỗi thêm kỹ năng:", error);
+      alert("Lỗi kết nối cơ sở dữ liệu!");
+    } else {
+      fetchData(); // Tải lại dữ liệu để cập nhật UI
+    }
   };
 
   const removeSkill = async (id) => {
@@ -394,6 +401,7 @@ function App() {
           {/* DÒNG KỸ NĂNG ĐÃ CHỌN */}
           <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginBottom: '20px', background: 'rgba(0,0,0,0.4)', padding: '10px', borderRadius: '8px' }}>
             {[0, 1, 2, 3, 4].map(i => {
+              // Tìm kỹ năng của member này tại vị trí ô i
               const skill = memberSkills.find(s => s.member_id === selectedMember.id && parseInt(s.pos_x) === i);
               return (
                 <div key={i} className="skill-box">
