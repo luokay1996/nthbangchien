@@ -6,7 +6,7 @@ const supabase = createClient(
   import.meta.env.VITE_SUPABASE_ANON_KEY
 );
 
-// Danh sách các Icon bạn đã gửi
+// Danh sách các Icon cố định
 const SKILL_ICONS = [
   "https://i.postimg.cc/DfDDfmVs/Screenshot-2026-04-02-232308.png",
   "https://i.postimg.cc/nV55VM8m/Screenshot-2026-04-02-232315.png",
@@ -39,12 +39,12 @@ function App() {
   const [isLimitEnabled, setIsLimitEnabled] = useState(true);
   const [movingMember, setMovingMember] = useState(null);
   const [selectedMember, setSelectedMember] = useState(null);
-  const [memberSkills, setMemberSkills] = useState([]); // State mới cho icon
+  const [memberSkills, setMemberSkills] = useState([]); 
+  const [draggedSkillUrl, setDraggedSkillUrl] = useState(null); // State theo dõi icon đang kéo
   const [form, setForm] = useState({ char_name: '', class_name: 'Toái Mộng', team_slot: null, type: 'Chính thức' });
   const [teamGroups, setTeamGroups] = useState({});
   const [teamPositions, setTeamPositions] = useState({});
   const mapRef = useRef(null);
-  const popupRef = useRef(null);
 
   const fetchData = useCallback(async () => {
     const { data: mems } = await supabase.from('register_list').select('*');
@@ -67,38 +67,42 @@ function App() {
   useEffect(() => {
     fetchData();
     const channel = supabase.channel('global-live-sync')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'register_list' }, fetchData)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'team_groups' }, fetchData)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'team_positions' }, fetchData)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'member_skills' }, fetchData)
+      .on('postgres_changes', { event: '*', schema: 'public' }, fetchData)
       .subscribe();
     return () => supabase.removeChannel(channel);
   }, [fetchData]);
 
-  // Hàm thêm icon mới vào pop-up
-  const addSkillIcon = async (url) => {
-    if (!selectedMember) return;
-    await supabase.from('member_skills').insert([{ 
-      member_id: selectedMember.id, 
-      skill_url: url, 
-      pos_x: 40 + Math.random() * 20, 
-      pos_y: 40 + Math.random() * 10 
-    }]);
+  // --- LOGIC KỸ NĂNG (MỚI) ---
+  const onDragSkillStart = (url) => {
+    setDraggedSkillUrl(url);
   };
 
-  // Hàm cập nhật vị trí icon khi kéo thả
-  const handleSkillDragEnd = async (e, skillId) => {
-    if (!popupRef.current) return;
-    const rect = popupRef.current.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width) * 100;
-    const y = ((e.clientY - rect.top) / rect.height) * 100;
+  const onDropToSlot = async (slotId) => {
+    if (!selectedMember || !draggedSkillUrl) return;
     
-    await supabase.from('member_skills').update({ pos_x: x, pos_y: y }).eq('id', skillId);
+    // Sử dụng upsert để ghi đè nếu slot đó đã có kỹ năng
+    await supabase.from('member_skills').upsert({ 
+      member_id: selectedMember.id, 
+      skill_url: draggedSkillUrl, 
+      slot_id: slotId 
+    }, { onConflict: 'member_id, slot_id' });
+    
+    setDraggedSkillUrl(null);
+    fetchData();
   };
 
+  const deleteSkillInSlot = async (slotId) => {
+    await supabase.from('member_skills')
+      .delete()
+      .eq('member_id', selectedMember.id)
+      .eq('slot_id', slotId);
+    fetchData();
+  };
+
+  // --- LOGIC TEAM & ADMIN ---
   const updateTeamPosition = async (teamId, x, y) => {
     setTeamPositions(prev => ({ ...prev, [teamId]: { x, y } }));
-    await supabase.from('team_positions').update({ pos_x: x, pos_y: y }).eq('team_id', teamId);
+    await supabase.from('team_positions').upsert({ team_id: teamId, pos_x: x, pos_y: y }, { onConflict: 'team_id' });
   };
 
   const handleDragEnd = (e, teamId) => {
@@ -106,34 +110,24 @@ function App() {
     const rect = mapRef.current.getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width) * 100;
     const y = ((e.clientY - rect.top) / rect.height) * 100;
-    const safeX = Math.max(0, Math.min(100, x));
-    const safeY = Math.max(0, Math.min(100, y));
-    updateTeamPosition(teamId, safeX, safeY);
+    updateTeamPosition(teamId, Math.max(0, Math.min(100, x)), Math.max(0, Math.min(100, y)));
   };
 
   const handleGroupChange = async (teamId, newGroupName) => {
     if (!isAdmin) return;
     setTeamGroups(prev => ({ ...prev, [teamId]: newGroupName }));
-    const { error } = await supabase.from('team_groups').update({ group_name: newGroupName }).eq('team_id', teamId);
-    if (error) fetchData();
+    await supabase.from('team_groups').upsert({ team_id: teamId, group_name: newGroupName }, { onConflict: 'team_id' });
   };
-
-  const officialCount = members.filter(m => m.char_name && m.type === 'Chính thức').length;
 
   const handleAdminLogin = () => {
     const pass = prompt("Nhập mật mã Admin:");
-    if (pass === "quymonquan2026") { 
-      setIsAdmin(true); 
-      alert("ĐÃ KÍCH HOẠT QUYỀN ADMIN!"); 
-    } else { 
-      alert("Sai mật mã!"); 
-    }
+    if (pass === "quymonquan2026") { setIsAdmin(true); alert("ADMIN: ON"); }
   };
 
   const handleResetBoard = async () => {
     if (window.confirm("Xóa sạch danh sách tuần này?")) {
       await supabase.from('register_list').delete().neq('id', 0);
-      await supabase.from('member_skills').delete().neq('member_id', 0);
+      await supabase.from('member_skills').delete().neq('id', 0);
       fetchData();
     }
   };
@@ -141,19 +135,13 @@ function App() {
   const toggleItem = async () => {
     if (!selectedMember) return;
     const { error } = await supabase.from('register_list').update({ has_item: !selectedMember.has_item }).eq('id', selectedMember.id);
-    if (!error) {
-      fetchData();
-      setSelectedMember(null);
-    }
+    if (!error) { fetchData(); setSelectedMember(null); }
   };
 
   const handleSlotClick = async (type, slotNum) => {
     const occupant = members.find(m => m.type === type && m.team_slot === slotNum);
     if (isAdmin && movingMember) {
-      if (movingMember.type === type && movingMember.team_slot === slotNum) {
-        setMovingMember(null);
-        return;
-      }
+      if (movingMember.id === occupant?.id) { setMovingMember(null); return; }
       if (occupant) {
         await Promise.all([
           supabase.from('register_list').update({ type: occupant.type, team_slot: occupant.team_slot }).eq('id', movingMember.id),
@@ -162,8 +150,7 @@ function App() {
       } else {
         await supabase.from('register_list').update({ type, team_slot: slotNum }).eq('id', movingMember.id);
       }
-      setMovingMember(null);
-      return;
+      setMovingMember(null); return;
     }
     if (occupant) {
       setSelectedMember(occupant);
@@ -176,10 +163,9 @@ function App() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.team_slot) return alert("Vui lòng chọn ô Slot!");
     const savedName = localStorage.getItem('my_char_name');
     if (!isAdmin && isLimitEnabled && savedName && members.some(m => m.char_name === savedName)) {
-      return alert(`Bạn đã đăng ký nhân vật [${savedName}]. Mỗi người chỉ được 1 ô!`);
+      return alert("Bạn đã đăng ký rồi!");
     }
     const { error } = await supabase.from('register_list').insert([form]);
     if (!error) {
@@ -191,13 +177,10 @@ function App() {
 
   const deleteMember = async () => {
     if (!selectedMember) return;
-    if (window.confirm(`Xác nhận xóa [${selectedMember.char_name}]?`)) {
-      const { error } = await supabase.from('register_list').delete().eq('id', selectedMember.id);
-      if (!error) {
-        if (selectedMember.char_name === localStorage.getItem('my_char_name')) localStorage.removeItem('my_char_name');
-        setSelectedMember(null);
-        fetchData();
-      }
+    if (window.confirm(`Xóa [${selectedMember.char_name}]?`)) {
+      await supabase.from('register_list').delete().eq('id', selectedMember.id);
+      setSelectedMember(null);
+      fetchData();
     }
   };
 
@@ -215,15 +198,11 @@ function App() {
           border: isBeingMoved ? '2px solid white' : isSelected ? '2px solid gold' : '1px solid #333',
           display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
           fontSize: '10px', color: occupant?.class_name === 'Long Ngâm' ? '#000' : 'white', fontWeight: 'bold',
-          padding: '0 4px', overflow: 'hidden', opacity: isBeingMoved ? 0.5 : 1
+          opacity: isBeingMoved ? 0.5 : 1
         }}
       >
-        {isLeaderSlot && <span style={{ position: 'absolute', top: '1px', left: '2px', fontSize: '8px', opacity: 0.8 }}>🔑</span>}
-        {occupant ? (
-          <div style={{ width: '100%', textAlign: 'center', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {occupant.char_name} {occupant.has_item && '📦'}
-          </div>
-        ) : `S${slotNum}`}
+        {isLeaderSlot && <span style={{ position: 'absolute', top: '1px', left: '2px', fontSize: '8px' }}>🔑</span>}
+        {occupant ? occupant.char_name : `S${slotNum}`}
       </div>
     );
   };
@@ -233,112 +212,85 @@ function App() {
       <style>{`
         .team-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; max-width: 1200px; margin: 0 auto; }
         @media (min-width: 1024px) { .team-grid { grid-template-columns: repeat(10, 1fr); } }
-        .group-select { width: 100%; background: #000; color: #fff; border: 1px solid #444; font-size: 10px; border-radius: 3px; cursor: pointer; margin-top: 5px; padding: 3px; font-weight: bold; appearance: none; text-align: center; }
-        .group-select:disabled { cursor: default; border-style: dashed; color: #fff; opacity: 1; }
-        .map-section { max-width: 900px; margin: 40px auto; padding: 20px; background: #0a0a0a; border-radius: 12px; border: 1px solid #333; position: relative; }
         .map-container { position: relative; width: 100%; border-radius: 8px; overflow: hidden; border: 2px solid #444; margin-top: 15px; }
-        .map-bg { width: 100%; display: block; opacity: 0.8; pointer-events: none; -webkit-user-drag: none; }
-        .team-node { position: absolute; width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; color: #000; cursor: move; transform: translate(-50%, -50%); border: 2px solid #fff; box-shadow: 0 0 15px rgba(0,0,0,0.8); z-index: 10; touch-action: none; }
-        .skill-icon-float { position: absolute; width: 40px; height: 40px; transform: translate(-50%, -50%); cursor: move; z-index: 5; border-radius: 4px; box-shadow: 0 0 5px gold; }
+        .team-node { position: absolute; width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; color: #000; cursor: move; transform: translate(-50%, -50%); border: 2px solid #fff; z-index: 10; }
+        
+        .skill-inventory { display: flex; gap: 8px; justify-content: center; margin-bottom: 20px; flex-wrap: wrap; background: #222; padding: 10px; border-radius: 8px; }
+        .skill-item-static { width: 40px; height: 40px; cursor: grab; border: 1px solid #444; border-radius: 4px; }
+        .skill-slots-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 15px 0; }
+        .slot-box { aspect-ratio: 1; background: #080808; border: 2px dashed #333; border-radius: 8px; display: flex; align-items: center; justify-content: center; position: relative; }
+        .slot-box.has-skill { border: 2px solid gold; background: #000; }
+        .btn-delete-skill { position: absolute; top: -5px; right: -5px; background: red; color: white; border: none; border-radius: 50%; width: 18px; height: 18px; fontSize: 10px; cursor: pointer; z-index: 2; }
       `}</style>
 
-      {/* ADMIN CONTROLS */}
-      <div style={{ position: 'absolute', top: '10px', right: '10px', display: 'flex', flexDirection: 'column', gap: '5px', alignItems: 'flex-end', zIndex: 100 }}>
-        <button onClick={handleAdminLogin} style={{ background: isAdmin ? '#d4af37' : 'transparent', color: isAdmin ? '#000' : '#d4af37', border: '1px solid #d4af37', padding: '5px 10px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>
-          {isAdmin ? "ADMIN: ON" : "ADMIN LOGIN"}
-        </button>
-        {isAdmin && (
-          <>
-            <button onClick={() => setIsLimitEnabled(!isLimitEnabled)} style={{ background: isLimitEnabled ? '#222' : 'red', color: 'white', border: '1px solid #444', padding: '5px 10px', borderRadius: '4px', fontSize: '10px' }}>
-              GIỚI HẠN: {isLimitEnabled ? "BẬT" : "TẮT"}
-            </button>
-            <button onClick={handleResetBoard} style={{ background: 'blue', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '4px', fontSize: '10px' }}>RESET</button>
-          </>
-        )}
+      {/* HEADER & ADMIN */}
+      <div style={{ position: 'absolute', top: '10px', right: '10px', display: 'flex', flexDirection: 'column', gap: '5px' }}>
+        <button onClick={handleAdminLogin} style={{ background: isAdmin ? '#d4af37' : 'transparent', color: isAdmin ? '#000' : '#d4af37', border: '1px solid #d4af37', padding: '5px', borderRadius: '4px', fontSize: '10px' }}>ADMIN</button>
+        {isAdmin && <button onClick={handleResetBoard} style={{ background: 'blue', color: 'white', border: 'none', padding: '5px', borderRadius: '4px', fontSize: '10px' }}>RESET</button>}
       </div>
 
-      <img src="/nth-logo.png" alt="Logo" style={{ width: '60px', margin: '0 auto', display: 'block' }} />
-      <h1 style={{ color: 'gold', fontSize: '20px', margin: '10px 0' }}>BANG QUỶ MÔN QUAN</h1>
+      <h1 style={{ color: 'gold', fontSize: '20px' }}>BANG QUỶ MÔN QUAN</h1>
 
-      {/* STATS & FORM GIỮ NGUYÊN */}
-      <div style={{ display: 'flex', justifyContent: 'center', gap: '5px', background: '#0a0a0a', padding: '10px', borderRadius: '8px', border: '1px solid #222', marginBottom: '15px', flexWrap: 'wrap' }}>
-        {Object.keys(classInfo).map(cls => (
-          <div key={cls} style={{ borderRight: '1px solid #222', paddingRight: '5px', minWidth: '60px' }}>
-            <div style={{ color: classInfo[cls].color, fontSize: '10px', fontWeight: 'bold' }}>{cls}</div>
-            <div style={{ fontSize: '14px' }}>{members.filter(m => m.class_name === cls).length}</div>
-          </div>
-        ))}
-        <div style={{ paddingLeft: '8px', borderLeft: '2px solid #333' }}>
-          <div style={{ fontSize: '10px', fontWeight: 'bold', color: '#00FF00' }}>QUÂN SỐ: {officialCount} / 60</div>
-        </div>
-      </div>
-      
-      <form onSubmit={handleSubmit} style={{ marginBottom: '25px' }}>
-        <input style={{ padding: '10px', background: '#111', color: 'white', border: '1px solid #333', borderRadius: '4px', width: '160px' }} placeholder="Tên..." value={form.char_name} onChange={e => setForm({...form, char_name: e.target.value})} required />
-        <select style={{ padding: '10px', background: '#111', color: 'white', border: '1px solid #333', margin: '0 5px', borderRadius: '4px' }} value={form.class_name} onChange={e => setForm({...form, class_name: e.target.value})}>
+      {/* FORM */}
+      <form onSubmit={handleSubmit} style={{ marginBottom: '20px' }}>
+        <input style={{ padding: '10px', background: '#111', color: 'white', border: '1px solid #333', width: '150px' }} placeholder="Tên..." value={form.char_name} onChange={e => setForm({...form, char_name: e.target.value})} required />
+        <select style={{ padding: '10px', background: '#111', color: 'white', border: '1px solid #333', margin: '0 5px' }} value={form.class_name} onChange={e => setForm({...form, class_name: e.target.value})}>
           {Object.keys(classInfo).map(c => <option key={c} value={c}>{c}</option>)}
         </select>
-        <button type="submit" style={{ padding: '10px 15px', background: 'gold', border: 'none', borderRadius: '4px', fontWeight: 'bold' }}>ĐĂNG KÝ</button>
+        <button type="submit" style={{ padding: '10px 15px', background: 'gold', border: 'none', fontWeight: 'bold' }}>ĐĂNG KÝ</button>
       </form>
 
-      {/* TEAMS GRID GIỮ NGUYÊN */}
+      {/* GRID TEAM */}
       <div className="team-grid">
-        {[...Array(10)].map((_, col) => {
-          const teamNum = col + 1;
-          const currentGroup = teamGroups[teamNum] || 'Nhóm 1';
-          const settings = groupSettings[currentGroup];
-          return (
-            <div key={col} style={{ background: settings.bg, padding: '8px', borderRadius: '8px', border: `2px solid ${settings.border}` }}>
-              <div style={{ marginBottom: '6px' }}>
-                <span style={{ color: settings.label, fontSize: '11px', fontWeight: 'bold' }}>TEAM {teamNum}</span>
-                <select className="group-select" value={currentGroup} disabled={!isAdmin} onChange={(e) => handleGroupChange(teamNum, e.target.value)}>
-                  {Object.keys(groupSettings).map(g => <option key={g} value={g}>{g}</option>)}
-                </select>
-              </div>
-              {[...Array(6)].map((_, row) => renderSlotCell('Chính thức', col * 6 + row + 1))}
-            </div>
-          );
-        })}
+        {[...Array(10)].map((_, col) => (
+          <div key={col} style={{ background: groupSettings[teamGroups[col+1]||'Nhóm 1'].bg, padding: '8px', borderRadius: '8px', border: `2px solid ${groupSettings[teamGroups[col+1]||'Nhóm 1'].border}` }}>
+            <div style={{ color: groupSettings[teamGroups[col+1]||'Nhóm 1'].label, fontSize: '11px', fontWeight: 'bold' }}>TEAM {col + 1}</div>
+            <select className="group-select" value={teamGroups[col+1] || 'Nhóm 1'} disabled={!isAdmin} onChange={(e) => handleGroupChange(col+1, e.target.value)} style={{ width: '100%', background: '#000', color: '#fff', fontSize: '9px', margin: '4px 0' }}>
+              {Object.keys(groupSettings).map(g => <option key={g} value={g}>{g}</option>)}
+            </select>
+            {[...Array(6)].map((_, row) => renderSlotCell('Chính thức', col * 6 + row + 1))}
+          </div>
+        ))}
       </div>
 
-      {/* MAP SECTION GIỮ NGUYÊN */}
-      <div className="map-section">
-        <div className="map-container" ref={mapRef}>
-          <img src="https://i.postimg.cc/SsMMSZLG/unnam2ed.jpg" alt="Map" className="map-bg" />
-          {[...Array(10)].map((_, i) => (
-            <div key={i+1} draggable={isAdmin} onDragEnd={(e) => handleDragEnd(e, i+1)} className="team-node" style={{ left: `${teamPositions[i+1]?.x || 0}%`, top: `${teamPositions[i+1]?.y || 0}%`, backgroundColor: groupSettings[teamGroups[i+1]||'Nhóm 1'].border }}>T{i+1}</div>
-          ))}
-        </div>
+      {/* MAP */}
+      <div className="map-container" ref={mapRef} style={{ maxWidth: '800px', margin: '20px auto' }}>
+        <img src="https://i.postimg.cc/SsMMSZLG/unnam2ed.jpg" alt="Map" style={{ width: '100%', opacity: 0.8 }} />
+        {[...Array(10)].map((_, i) => (
+          <div key={i+1} draggable={isAdmin} onDragEnd={(e) => handleDragEnd(e, i+1)} className="team-node" style={{ left: `${teamPositions[i+1]?.x || 0}%`, top: `${teamPositions[i+1]?.y || 0}%`, backgroundColor: groupSettings[teamGroups[i+1]||'Nhóm 1'].border }}>T{i+1}</div>
+        ))}
       </div>
 
-      {/* POPUP ACTION CẬP NHẬT: KÉO THẢ ICON */}
+      {/* POPUP ACTION (SLOT SKILLS) */}
       {selectedMember && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div ref={popupRef} style={{ background: '#1a1a1a', padding: '20px', borderRadius: '15px', border: '2px solid gold', width: '90%', maxWidth: '450px', position: 'relative', height: '400px' }}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: '#1a1a1a', padding: '20px', borderRadius: '15px', border: '2px solid gold', width: '90%', maxWidth: '400px' }}>
+            <div style={{ fontWeight: 'bold', color: 'gold', fontSize: '18px', marginBottom: '10px' }}>{selectedMember.char_name}</div>
             
-            <div style={{ fontWeight: 'bold', color: 'gold', fontSize: '18px' }}>{selectedMember.char_name}</div>
-            
-            {/* Vùng kéo thả icon */}
-            <div style={{ position: 'relative', height: '220px', background: '#000', borderRadius: '10px', margin: '15px 0', border: '1px solid #333', overflow: 'hidden' }}>
-              <p style={{ fontSize: '10px', color: '#444', marginTop: '100px' }}>Khu vực kéo thả icon</p>
-              
-              {memberSkills.filter(s => s.member_id === selectedMember.id).map(skill => (
-                <img 
-                  key={skill.id}
-                  src={skill.skill_url}
-                  draggable
-                  onDragEnd={(e) => handleSkillDragEnd(e, skill.id)}
-                  className="skill-icon-float"
-                  style={{ left: `${skill.pos_x}%`, top: `${skill.pos_y}%` }}
-                />
+            <p style={{ fontSize: '11px', color: '#888' }}>Kho kỹ năng (Kéo thả vào ô dưới)</p>
+            <div className="skill-inventory">
+              {SKILL_ICONS.map((url, idx) => (
+                <img key={idx} src={url} className="skill-item-static" draggable onDragStart={() => onDragSkillStart(url)} />
               ))}
             </div>
 
-            {/* Danh sách Icon để chọn (Role: mọi người) */}
-            <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', marginBottom: '15px', flexWrap: 'wrap' }}>
-              {SKILL_ICONS.map((url, idx) => (
-                <img key={idx} src={url} onClick={() => addSkillIcon(url)} style={{ width: '35px', height: '35px', cursor: 'pointer', border: '1px solid #444', borderRadius: '4px' }} title="Click để thêm" />
-              ))}
+            <div className="skill-slots-grid">
+              {[...Array(8)].map((_, i) => {
+                const slotId = i + 1;
+                const skill = memberSkills.find(s => s.member_id === selectedMember.id && s.slot_id === slotId);
+                return (
+                  <div key={slotId} className={`slot-box ${skill ? 'has-skill' : ''}`} onDragOver={(e) => e.preventDefault()} onDrop={() => onDropToSlot(slotId)}>
+                    {skill ? (
+                      <>
+                        <img src={skill.skill_url} style={{ width: '100%', borderRadius: '6px' }} />
+                        <button className="btn-delete-skill" onClick={() => deleteSkillInSlot(slotId)}>×</button>
+                      </>
+                    ) : (
+                      <span style={{ fontSize: '9px', color: '#333' }}>Ô {slotId}</span>
+                    )}
+                  </div>
+                );
+              })}
             </div>
 
             <div style={{ display: 'flex', gap: '10px' }}>
