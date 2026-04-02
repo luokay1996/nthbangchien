@@ -161,9 +161,16 @@ function App() {
     setSelectedMember(null);
   };
 
-  // --- HÀM THÊM SKILL VÀO NHÂN VẬT (DÀNH CHO TẤT CẢ) ---
+  // --- HÀM THÊM SKILL VÀO NHÂN VẬT (CHỈ CHỦ SỞ HỮU HOẶC ADMIN) ---
   const addSkillToMember = async (url) => {
     if (!selectedMember || !url) return;
+
+    // Kiểm tra quyền: Phải là Admin HOẶC là chính nhân vật đó
+    const isOwner = selectedMember.char_name === localStorage.getItem('my_char_name');
+    if (!isAdmin && !isOwner) {
+      return alert("Bạn chỉ có thể trang bị kỹ năng cho nhân vật của chính mình!");
+    }
+
     const currentSkills = memberSkills.filter(s => s.member_id === selectedMember.id);
     if (currentSkills.length >= 5) return alert("Tối đa 5 kỹ năng!");
     
@@ -230,6 +237,10 @@ const addToLibrary = async (url) => {
   };
 
   const removeSkillFromMember = async (id) => {
+    // Kiểm tra quyền trước khi xóa
+    const isOwner = selectedMember?.char_name === localStorage.getItem('my_char_name');
+    if (!isAdmin && !isOwner) return;
+
     await supabase.from('member_skills').delete().eq('id', id);
     fetchData();
   };
@@ -328,7 +339,7 @@ const addToLibrary = async (url) => {
         {isAdmin && (
           <>
             <button onClick={() => setIsLimitEnabled(!isLimitEnabled)} style={{ background: isLimitEnabled ? '#222' : 'red', color: 'white', border: '1px solid #444', padding: '5px 10px', borderRadius: '4px', fontSize: '10px' }}>
-              GIỚI HẠN: {isLimitEnabled ? "BẬT" : "TẮT"}
+              GIỚI HẠN: {isLimitEnabled ? "BẬT" : "TẤT"}
             </button>
             <button onClick={handleResetBoard} style={{ background: 'blue', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '4px', fontSize: '10px' }}>RESET</button>
           </>
@@ -418,7 +429,11 @@ const addToLibrary = async (url) => {
 
           <div style={{ marginBottom: '15px', background: '#222', padding: '10px', borderRadius: '8px' }}>
             <div style={{ fontSize: '10px', color: 'gold', marginBottom: '8px' }}>CHỌN SKILL</div>
-            <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap', maxHeight: '150px', overflowY: 'auto', padding: '5px' }}>
+            <div style={{ 
+              display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap', maxHeight: '150px', overflowY: 'auto', padding: '5px',
+              opacity: (isAdmin || selectedMember.char_name === localStorage.getItem('my_char_name')) ? 1 : 0.5,
+              pointerEvents: (isAdmin || selectedMember.char_name === localStorage.getItem('my_char_name')) ? 'auto' : 'none'
+            }}>
               {skillLibrary.map((item) => (
                 <div key={item.id} className="skill-lib-item-container">
                   <img src={item.url} className="skill-lib-item" onClick={() => addSkillToMember(item.url)} alt="skill" />
@@ -429,7 +444,7 @@ const addToLibrary = async (url) => {
               {skillLibrary.length === 0 && <div style={{fontSize: '10px', color: '#555'}}>Kho skill trống...</div>}
             </div>
 
-            {/* --- CHỈ ADMIN CÓ QUYỀN THÊM SKILL VÀO KHO --- */}
+            {/* --- CHỈ ADMIN CÓ QUYỀN THÊM SKILL MỚI VÀO KHO CHUNG --- */}
             {isAdmin && (
               <div style={{ marginTop: '10px', borderTop: '1px solid #333', paddingTop: '10px' }}>
                 <div style={{ fontSize: '9px', color: '#888', marginBottom: '5px' }}>ADMIN: THÊM SKILL MỚI VÀO KHO</div>
@@ -448,12 +463,13 @@ const addToLibrary = async (url) => {
           <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginBottom: '20px', background: 'rgba(0,0,0,0.4)', padding: '10px', borderRadius: '8px' }}>
             {[0, 1, 2, 3, 4].map(i => {
               const skill = memberSkills.find(s => s.member_id === selectedMember.id && parseInt(s.pos_x) === i);
+              const canModify = isAdmin || selectedMember.char_name === localStorage.getItem('my_char_name');
               return (
                 <div key={i} className="skill-box">
                   {skill ? (
                     <>
                       <img src={skill.skill_url} style={{ width: '100%', height: '100%', borderRadius: '6px' }} alt="equipped" />
-                      {(isAdmin || selectedMember.char_name === localStorage.getItem('my_char_name')) && (
+                      {canModify && (
                         <div onClick={() => removeSkillFromMember(skill.id)} style={{ position: 'absolute', top: '-5px', right: '-5px', background: 'red', color: 'white', width: '18px', height: '18px', borderRadius: '50%', fontSize: '11px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', border: '1px solid white' }}>×</div>
                       )}
                     </>
