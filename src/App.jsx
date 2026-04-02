@@ -33,15 +33,13 @@ const groupSettings = {
   'Nhóm 4': { bg: 'rgba(255, 69, 0, 0.15)', border: '#ff4500', label: '#ff4500' },
 };
 
-// COMPONENT POP-UP TÁCH RIÊNG (ĐÃ ĐẢO THỨ TỰ: KHO TRÊN - VÙNG THẢ DƯỚI)
+// COMPONENT POP-UP TÁCH RIÊNG (ĐÃ SỬA: 6 Ô TRỐNG CỐ ĐỊNH)
 const MemberDetailPopup = ({ 
   selectedMember, 
   setSelectedMember, 
   memberSkills, 
   SKILL_ICONS, 
-  dropZoneRef, 
-  handleDropOnZone, 
-  handleStartDragExisting, 
+  handleDropOnSlot, 
   handleStartDragFromLibrary, 
   deleteSkill, 
   toggleItem, 
@@ -49,6 +47,11 @@ const MemberDetailPopup = ({
   isAdmin 
 }) => {
   if (!selectedMember) return null;
+
+  // Tạo mảng 6 ô slot (index từ 0-5)
+  const slots = [0, 1, 2, 3, 4, 5];
+  // Lấy danh sách skill hiện tại của member này
+  const equippedSkills = memberSkills.filter(s => s.member_id === selectedMember.id);
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -58,9 +61,9 @@ const MemberDetailPopup = ({
           {selectedMember.char_name}
         </div>
 
-        {/* 1. KHO KỸ NĂNG: BÂY GIỜ NẰM Ở TRÊN */}
+        {/* 1. KHO KỸ NĂNG: NẰM Ở TRÊN */}
         <div style={{ marginBottom: '20px', padding: '15px', background: '#1a1a1a', borderRadius: '10px', border: '1px solid #333' }}>
-          <div style={{ fontSize: '12px', color: 'gold', marginBottom: '10px', fontWeight: 'bold', textAlign: 'center' }}>KHO KỸ NĂNG (Kéo icon xuống)</div>
+          <div style={{ fontSize: '12px', color: 'gold', marginBottom: '10px', fontWeight: 'bold', textAlign: 'center' }}>KHO KỸ NĂNG</div>
           <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
             {SKILL_ICONS.map((url, idx) => (
               <img 
@@ -69,31 +72,51 @@ const MemberDetailPopup = ({
                 draggable
                 onDragStart={(e) => handleStartDragFromLibrary(e, url)}
                 className="skill-library-icon"
+                style={{ width: '45px', height: '45px', cursor: 'grab', borderRadius: '6px', border: '1px solid #444' }}
               />
             ))}
           </div>
         </div>
 
-        {/* 2. VÙNG ĐEN: BÂY GIỜ NẰM Ở DƯỚI (NƠI TRANG BỊ) */}
-        <div 
-          ref={dropZoneRef}
-          onDragOver={(e) => e.preventDefault()}
-          onDrop={handleDropOnZone}
-          style={{ position: 'relative', height: '260px', background: '#000', borderRadius: '12px', border: '2px dashed #333', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-        >
-          <div style={{ fontSize: '11px', color: '#444', pointerEvents: 'none' }}>Kéo Icon từ kho và thả vào đây để trang bị</div>
-          
-          {memberSkills.filter(s => s.member_id === selectedMember.id).map(skill => (
-            <img 
-              key={skill.id}
-              src={skill.skill_url}
-              draggable
-              onDragStart={(e) => handleStartDragExisting(e, skill.id)}
-              onDoubleClick={() => deleteSkill(skill.id)}
-              className="skill-icon-float"
-              style={{ left: `${skill.pos_x}%`, top: `${skill.pos_y}%` }}
-            />
-          ))}
+        {/* 2. 6 Ô TRỐNG TRANG BỊ: NẰM Ở DƯỚI */}
+        <div style={{ padding: '15px', background: '#000', borderRadius: '12px', border: '1px solid #333' }}>
+          <div style={{ fontSize: '12px', color: '#666', marginBottom: '15px', textAlign: 'center' }}>TRANG BỊ (Kéo từ kho thả vào các ô dưới)</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '15px', justifyItems: 'center' }}>
+            {slots.map(slotIdx => {
+              // Tìm xem trong DB có skill nào đang nằm ở slotIdx (pos_x) này không
+              const skillInSlot = equippedSkills.find(s => parseInt(s.pos_x) === slotIdx);
+              
+              return (
+                <div 
+                  key={slotIdx}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => handleDropOnSlot(e, slotIdx)}
+                  style={{ 
+                    width: '65px', 
+                    height: '65px', 
+                    background: '#111', 
+                    border: '2px dashed #333', 
+                    borderRadius: '8px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    position: 'relative'
+                  }}
+                >
+                  {skillInSlot ? (
+                    <img 
+                      src={skillInSlot.skill_url}
+                      onDoubleClick={() => deleteSkill(skillInSlot.id)}
+                      style={{ width: '100%', height: '100%', borderRadius: '6px', border: '1px solid gold', cursor: 'pointer' }}
+                      title="Nhấn đúp để gỡ"
+                    />
+                  ) : (
+                    <span style={{ color: '#222', fontSize: '24px' }}>+</span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
 
         <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
@@ -121,8 +144,6 @@ function App() {
   const [teamGroups, setTeamGroups] = useState({});
   const [teamPositions, setTeamPositions] = useState({});
   const mapRef = useRef(null);
-  const popupRef = useRef(null);
-  const dropZoneRef = useRef(null); 
 
   const fetchData = useCallback(async () => {
     const { data: mems } = await supabase.from('register_list').select('*');
@@ -157,34 +178,30 @@ function App() {
     e.dataTransfer.setData("skillUrl", url);
   };
 
-  const handleDropOnZone = async (e) => {
+  // Hàm xử lý thả vào 1 ô cụ thể
+  const handleDropOnSlot = async (e, slotIdx) => {
     e.preventDefault();
-    if (!selectedMember || !dropZoneRef.current) return;
-
-    const rect = dropZoneRef.current.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width) * 100;
-    const y = ((e.clientY - rect.top) / rect.height) * 100;
-    const safeX = Math.max(5, Math.min(95, x));
-    const safeY = Math.max(5, Math.min(95, y));
+    if (!selectedMember) return;
 
     const skillUrl = e.dataTransfer.getData("skillUrl");
-    const skillId = e.dataTransfer.getData("skillId");
+    if (!skillUrl) return;
 
-    if (skillUrl) {
+    // Kiểm tra ô này đã có skill chưa (để thay thế)
+    const existing = memberSkills.find(s => s.member_id === selectedMember.id && parseInt(s.pos_x) === slotIdx);
+
+    if (existing) {
+      // Nếu ô đã có skill, ta cập nhật lại URL (thay skill mới)
+      await supabase.from('member_skills').update({ skill_url: skillUrl }).eq('id', existing.id);
+    } else {
+      // Nếu ô trống, chèn mới vào slotIdx
       await supabase.from('member_skills').insert([{ 
         member_id: selectedMember.id, 
         skill_url: skillUrl, 
-        pos_x: safeX, 
-        pos_y: safeY 
+        pos_x: slotIdx, // Lưu chỉ số ô vào pos_x
+        pos_y: 0 
       }]);
-    } else if (skillId) {
-      await supabase.from('member_skills').update({ pos_x: safeX, pos_y: safeY }).eq('id', skillId);
     }
     fetchData();
-  };
-
-  const handleStartDragExisting = (e, skillId) => {
-    e.dataTransfer.setData("skillId", skillId);
   };
 
   const deleteSkill = async (skillId) => {
@@ -228,7 +245,7 @@ function App() {
   const handleResetBoard = async () => {
     if (window.confirm("Xóa sạch danh sách tuần này?")) {
       await supabase.from('register_list').delete().neq('id', 0);
-      await supabase.from('member_skills').delete().filter('id', 'neq', '00000000-0000-0000-0000-000000000000');
+      await supabase.from('member_skills').delete().neq('id', 0);
       fetchData();
     }
   };
@@ -335,7 +352,6 @@ function App() {
         .map-container { position: relative; width: 100%; border-radius: 8px; overflow: hidden; border: 2px solid #444; margin-top: 15px; }
         .map-bg { width: 100%; display: block; opacity: 0.8; pointer-events: none; -webkit-user-drag: none; }
         .team-node { position: absolute; width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; color: #000; cursor: move; transform: translate(-50%, -50%); border: 2px solid #fff; box-shadow: 0 0 15px rgba(0,0,0,0.8); z-index: 10; touch-action: none; }
-        .skill-icon-float { position: absolute; width: 40px; height: 40px; transform: translate(-50%, -50%); cursor: move; z-index: 5; border-radius: 4px; box-shadow: 0 0 10px gold; border: 1px solid gold; background: #000; }
         .skill-library-icon { width: 45px; height: 45px; cursor: grab; border: 1px solid #444; border-radius: 6px; transition: 0.2s; background: #111; }
         .skill-library-icon:hover { border-color: gold; transform: scale(1.1); }
       `}</style>
@@ -411,9 +427,7 @@ function App() {
         setSelectedMember={setSelectedMember}
         memberSkills={memberSkills}
         SKILL_ICONS={SKILL_ICONS}
-        dropZoneRef={dropZoneRef}
-        handleDropOnZone={handleDropOnZone}
-        handleStartDragExisting={handleStartDragExisting}
+        handleDropOnSlot={handleDropOnSlot}
         handleStartDragFromLibrary={handleStartDragFromLibrary}
         deleteSkill={deleteSkill}
         toggleItem={toggleItem}
