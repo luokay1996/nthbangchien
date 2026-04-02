@@ -33,7 +33,11 @@ function App() {
   const [form, setForm] = useState({ char_name: '', class_name: 'Toái Mộng', team_slot: null, type: 'Chính thức' });
   const [teamGroups, setTeamGroups] = useState({});
   const [teamPositions, setTeamPositions] = useState({});
+<<<<<<< HEAD
   const [mapMarkers, setMapMarkers] = useState([]);
+=======
+  const [mapMarkers, setMapMarkers] = useState([]); // Lưu icon kiếm, khiên, chú ý
+>>>>>>> e35b4ac9ec21970d014bef72e89a984fc56d7582
   const mapRef = useRef(null);
 
   const fetchData = useCallback(async () => {
@@ -43,8 +47,19 @@ function App() {
     const { data: markers } = await supabase.from('map_markers').select('*').order('created_at', { ascending: true });
     
     if (mems) setMembers(mems);
+<<<<<<< HEAD
     if (groups) setTeamGroups(Object.fromEntries(groups.map(g => [g.team_id, g.group_name])));
     if (positions) setTeamPositions(Object.fromEntries(positions.map(p => [p.team_id, { x: p.pos_x, y: p.pos_y }])));
+=======
+    if (groups) {
+      const groupMap = Object.fromEntries(groups.map(g => [g.team_id, g.group_name]));
+      setTeamGroups(groupMap);
+    }
+    if (positions) {
+      const posMap = Object.fromEntries(positions.map(p => [p.team_id, { x: p.pos_x, y: p.pos_y }]));
+      setTeamPositions(posMap);
+    }
+>>>>>>> e35b4ac9ec21970d014bef72e89a984fc56d7582
     if (markers) setMapMarkers(markers);
   }, []);
 
@@ -59,6 +74,7 @@ function App() {
     return () => supabase.removeChannel(channel);
   }, [fetchData]);
 
+<<<<<<< HEAD
   // OPTIMIZED DRAG & DROP LOGIC
   const handleSlotClick = async (type, slotNum) => {
     const occupant = members.find(m => m.type === type && m.team_slot === slotNum);
@@ -108,29 +124,58 @@ function App() {
   };
 
   // MAP LOGIC
+=======
+  // LOGIC MAP MARKERS (Kiếm, Khiên, Chú ý)
+>>>>>>> e35b4ac9ec21970d014bef72e89a984fc56d7582
   const handleDropNewMarker = async (e) => {
     if (!isAdmin || !mapRef.current) return;
     const type = e.dataTransfer.getData("markerType");
     if (!type) return;
+<<<<<<< HEAD
     const rect = mapRef.current.getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width) * 100;
     const y = ((e.clientY - rect.top) / rect.height) * 100;
     await supabase.from('map_markers').insert([{ type, pos_x: Math.max(0, Math.min(100, x)), pos_y: Math.max(0, Math.min(100, y)) }]);
+=======
+
+    const rect = mapRef.current.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 100;
+    const y = ((e.clientY - rect.top) / rect.height) * 100;
+
+    await supabase.from('map_markers').insert([{ 
+      type, 
+      pos_x: Math.max(0, Math.min(100, x)), 
+      pos_y: Math.max(0, Math.min(100, y)) 
+    }]);
+>>>>>>> e35b4ac9ec21970d014bef72e89a984fc56d7582
     fetchData();
   };
 
   const handleUndoMarker = async () => {
     if (!isAdmin || mapMarkers.length === 0) return;
+<<<<<<< HEAD
     await supabase.from('map_markers').delete().eq('id', mapMarkers[mapMarkers.length - 1].id);
+=======
+    const lastMarker = mapMarkers[mapMarkers.length - 1];
+    await supabase.from('map_markers').delete().eq('id', lastMarker.id);
+>>>>>>> e35b4ac9ec21970d014bef72e89a984fc56d7582
     fetchData();
   };
 
   const handleResetMarkers = async () => {
+<<<<<<< HEAD
     if (!isAdmin || !window.confirm("Xóa toàn bộ Icon chỉ đạo?")) return;
+=======
+    if (!isAdmin || !window.confirm("Xóa toàn bộ Icon chỉ đạo trên bản đồ?")) return;
+>>>>>>> e35b4ac9ec21970d014bef72e89a984fc56d7582
     await supabase.from('map_markers').delete().neq('id', 0);
     fetchData();
   };
 
+<<<<<<< HEAD
+=======
+  // LOGIC CŨ
+>>>>>>> e35b4ac9ec21970d014bef72e89a984fc56d7582
   const updateTeamPosition = async (teamId, x, y) => {
     setTeamPositions(prev => ({ ...prev, [teamId]: { x, y } }));
     await supabase.from('team_positions').update({ pos_x: x, pos_y: y }).eq('team_id', teamId);
@@ -139,9 +184,17 @@ function App() {
   const handleDragEndNode = (e, teamId) => {
     if (!mapRef.current) return;
     const rect = mapRef.current.getBoundingClientRect();
+<<<<<<< HEAD
     const x = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
     const y = Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100));
     updateTeamPosition(teamId, x, y);
+=======
+    const x = ((e.clientX - rect.left) / rect.width) * 100;
+    const y = ((e.clientY - rect.top) / rect.height) * 100;
+    const safeX = Math.max(0, Math.min(100, x));
+    const safeY = Math.max(0, Math.min(100, y));
+    updateTeamPosition(teamId, safeX, safeY);
+>>>>>>> e35b4ac9ec21970d014bef72e89a984fc56d7582
   };
 
   const handleAdminLogin = () => {
@@ -159,6 +212,7 @@ function App() {
 
   const toggleItem = async () => {
     if (!selectedMember) return;
+<<<<<<< HEAD
     await supabase.from('register_list').update({ has_item: !selectedMember.has_item }).eq('id', selectedMember.id);
     fetchData();
     setSelectedMember(null);
@@ -172,6 +226,64 @@ function App() {
       setSelectedMember(null);
       fetchData();
     }
+=======
+    const { error } = await supabase.from('register_list').update({ has_item: !selectedMember.has_item }).eq('id', selectedMember.id);
+    if (!error) {
+      fetchData();
+      setSelectedMember(null);
+    }
+  };
+
+  const handleSlotClick = async (type, slotNum) => {
+    const occupant = members.find(m => m.type === type && m.team_slot === slotNum);
+    
+    if (isAdmin && movingMember) {
+      if (occupant) {
+        await Promise.all([
+          supabase.from('register_list').update({ type: occupant.type, team_slot: occupant.team_slot }).eq('id', movingMember.id),
+          supabase.from('register_list').update({ type: movingMember.type, team_slot: movingMember.team_slot }).eq('id', occupant.id)
+        ]);
+      } else {
+        await supabase.from('register_list').update({ type, team_slot: slotNum }).eq('id', movingMember.id);
+      }
+      setMovingMember(null);
+      setDragOverSlot(null);
+      fetchData();
+      return;
+    }
+
+    if (occupant) {
+      setSelectedMember(occupant);
+      if (isAdmin) setMovingMember(occupant);
+      return;
+    }
+    setForm({ ...form, type, team_slot: slotNum });
+    setSelectedMember(null);
+>>>>>>> e35b4ac9ec21970d014bef72e89a984fc56d7582
+  };
+
+  const onMemberDragStart = (e, member) => {
+    if (!isAdmin) return;
+    setMovingMember(member);
+    e.currentTarget.style.opacity = '0.4';
+  };
+
+  const onMemberDragEnd = (e) => {
+    e.currentTarget.style.opacity = '1';
+    setDragOverSlot(null);
+  };
+
+  const onMemberDragOver = (e, type, slotNum) => {
+    e.preventDefault();
+    if (!isAdmin) return;
+    setDragOverSlot(`${type}-${slotNum}`);
+  };
+
+  const onMemberDrop = async (e, targetType, targetSlotNum) => {
+    e.preventDefault();
+    setDragOverSlot(null);
+    if (!isAdmin || !movingMember) return;
+    await handleSlotClick(targetType, targetSlotNum);
   };
 
   const handleSubmit = async (e) => {
@@ -186,6 +298,21 @@ function App() {
       localStorage.setItem('my_char_name', form.char_name);
       setForm({ ...form, char_name: '', team_slot: null });
       fetchData();
+<<<<<<< HEAD
+=======
+    }
+  };
+
+  const deleteMember = async () => {
+    if (!selectedMember) return;
+    if (window.confirm(`Xác nhận xóa [${selectedMember.char_name}]?`)) {
+      const { error } = await supabase.from('register_list').delete().eq('id', selectedMember.id);
+      if (!error) {
+        if (selectedMember.char_name === localStorage.getItem('my_char_name')) localStorage.removeItem('my_char_name');
+        setSelectedMember(null);
+        fetchData();
+      }
+>>>>>>> e35b4ac9ec21970d014bef72e89a984fc56d7582
     }
   };
 
@@ -201,9 +328,17 @@ function App() {
         key={`${type}-${slotNum}`} 
         onClick={() => handleSlotClick(type, slotNum)}
         draggable={isAdmin && !!occupant}
+<<<<<<< HEAD
         onDragStart={(e) => { if(!isAdmin) return; setMovingMember(occupant); e.dataTransfer.setData("memberId", occupant.id); }}
         onDragOver={(e) => { e.preventDefault(); if(isAdmin) setDragOverSlot(`${type}-${slotNum}`); }}
         onDrop={(e) => { e.preventDefault(); handleSlotClick(type, slotNum); }}
+=======
+        onDragStart={(e) => onMemberDragStart(e, occupant)}
+        onDragEnd={onMemberDragEnd}
+        onDragOver={(e) => onMemberDragOver(e, type, slotNum)}
+        onDragLeave={() => setDragOverSlot(null)}
+        onDrop={(e) => onMemberDrop(e, type, slotNum)}
+>>>>>>> e35b4ac9ec21970d014bef72e89a984fc56d7582
         className={`slot-cell ${isHovered ? 'drag-hover' : ''} ${isBeingMoved ? 'moving' : ''}`}
         style={{
           height: '42px', margin: '3px 0', borderRadius: '4px', position: 'relative',
@@ -216,7 +351,11 @@ function App() {
       >
         {isLeaderSlot && <span style={{ position: 'absolute', top: '1px', left: '2px', fontSize: '8px', opacity: 0.8 }}>🔑</span>}
         {occupant ? (
+<<<<<<< HEAD
           <div style={{ textAlign: 'center', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', pointerEvents: 'none' }}>
+=======
+          <div style={{ width: '100%', textAlign: 'center', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', pointerEvents: 'none' }}>
+>>>>>>> e35b4ac9ec21970d014bef72e89a984fc56d7582
             {occupant.char_name} {occupant.has_item && '📦'}
           </div>
         ) : `S${slotNum}`}
@@ -230,6 +369,7 @@ function App() {
         .team-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; max-width: 1200px; margin: 0 auto; }
         @media (min-width: 1024px) { .team-grid { grid-template-columns: repeat(10, 1fr); } }
         .group-select { width: 100%; background: #000; color: #fff; border: 1px solid #444; font-size: 10px; border-radius: 3px; cursor: pointer; margin-top: 5px; padding: 3px; font-weight: bold; appearance: none; text-align: center; }
+<<<<<<< HEAD
         .slot-cell.drag-hover { filter: brightness(1.5); transform: scale(1.02); }
         .map-section { max-width: 900px; margin: 40px auto; padding: 20px; background: #0a0a0a; border-radius: 12px; border: 1px solid #333; position: relative; }
         .map-container { position: relative; width: 100%; border-radius: 8px; overflow: hidden; border: 2px solid #444; margin-top: 15px; }
@@ -239,6 +379,32 @@ function App() {
         .marker-source { font-size: 28px; cursor: grab; padding: 10px; background: rgba(255,255,255,0.1); border-radius: 8px; border: 1px solid #444; }
         .map-btn { background: #1a1a1a; color: #ccc; border: 1px solid #444; padding: 4px 8px; border-radius: 4px; font-size: 10px; cursor: pointer; }
         .skill-slot { width: 45px; height: 45px; background: #222; border: 1px solid #444; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 20px; }
+=======
+        .map-section { max-width: 900px; margin: 40px auto; padding: 20px; background: #0a0a0a; border-radius: 12px; border: 1px solid #333; position: relative; }
+        .map-container { position: relative; width: 100%; border-radius: 8px; overflow: hidden; border: 2px solid #444; margin-top: 15px; }
+        .map-bg { width: 100%; display: block; opacity: 0.8; pointer-events: none; }
+        .team-node { 
+          position: absolute; width: 34px; height: 34px; border-radius: 50%; 
+          display: flex; align-items: center; justify-content: center; 
+          font-size: 12px; font-weight: bold; color: #000; transform: translate(-50%, -50%); 
+          border: 2px solid #fff; box-shadow: 0 0 15px rgba(0,0,0,0.8); z-index: 10;
+        }
+        .marker-icon {
+          position: absolute; font-size: 24px; transform: translate(-50%, -50%); z-index: 15;
+          filter: drop-shadow(0 0 5px rgba(0,0,0,1)); cursor: default;
+        }
+        .marker-source {
+          font-size: 28px; cursor: grab; padding: 10px; background: rgba(255,255,255,0.1); 
+          border-radius: 8px; border: 1px solid #444; transition: all 0.2s;
+        }
+        .marker-source:hover { background: rgba(255,255,255,0.2); transform: scale(1.1); }
+        .marker-source:active { cursor: grabbing; }
+        .map-btn {
+          background: #1a1a1a; color: #ccc; border: 1px solid #444; padding: 4px 8px; 
+          border-radius: 4px; fontSize: 10px; cursor: pointer; transition: 0.2s;
+        }
+        .map-btn:hover { background: #333; color: #fff; }
+>>>>>>> e35b4ac9ec21970d014bef72e89a984fc56d7582
       `}</style>
 
       {/* ADMIN CONTROLS */}
@@ -259,7 +425,11 @@ function App() {
       <img src="/nth-logo.png" alt="Logo" style={{ width: '60px', margin: '0 auto', display: 'block' }} />
       <h1 style={{ color: 'gold', fontSize: '20px', margin: '10px 0' }}>BANG QUỶ MÔN QUAN</h1>
 
+<<<<<<< HEAD
       {/* STATS */}
+=======
+      {/* STATS (Giữ nguyên) */}
+>>>>>>> e35b4ac9ec21970d014bef72e89a984fc56d7582
       <div style={{ display: 'flex', justifyContent: 'center', gap: '5px', background: '#0a0a0a', padding: '10px', borderRadius: '8px', border: '1px solid #222', marginBottom: '15px', flexWrap: 'wrap' }}>
         {Object.keys(classInfo).map(cls => (
           <div key={cls} style={{ borderRight: '1px solid #222', paddingRight: '5px', minWidth: '60px' }}>
@@ -272,7 +442,7 @@ function App() {
         </div>
       </div>
       
-      {/* REGISTER FORM */}
+      {/* FORM (Giữ nguyên) */}
       <form onSubmit={handleSubmit} style={{ marginBottom: '25px' }}>
         <input style={{ padding: '10px', background: '#111', color: 'white', border: '1px solid #333', borderRadius: '4px', width: '160px' }} placeholder="Tên..." value={form.char_name} onChange={e => setForm({...form, char_name: e.target.value})} required />
         <select style={{ padding: '10px', background: '#111', color: 'white', border: '1px solid #333', margin: '0 5px', borderRadius: '4px' }} value={form.class_name} onChange={e => setForm({...form, class_name: e.target.value})}>
@@ -283,7 +453,7 @@ function App() {
         </button>
       </form>
 
-      {/* MAIN TEAMS */}
+      {/* TEAMS (Giữ nguyên) */}
       <div className="team-grid">
         {[...Array(10)].map((_, col) => {
           const teamNum = col + 1;
@@ -293,11 +463,15 @@ function App() {
             <div key={col} style={{ background: settings.bg, padding: '8px', borderRadius: '8px', border: `2px solid ${settings.border}` }}>
               <div style={{ marginBottom: '6px' }}>
                 <span style={{ color: settings.label, fontSize: '11px', fontWeight: 'bold' }}>TEAM {teamNum}</span>
+<<<<<<< HEAD
                 <select className="group-select" value={currentGroup} disabled={!isAdmin} onChange={e => {
                   const newGroup = e.target.value;
                   setTeamGroups(prev => ({ ...prev, [teamNum]: newGroup }));
                   supabase.from('team_groups').update({ group_name: newGroup }).eq('team_id', teamNum).then(() => fetchData());
                 }}>
+=======
+                <select className="group-select" value={currentGroup} disabled={!isAdmin} onChange={(e) => handleGroupChange(teamNum, e.target.value)}>
+>>>>>>> e35b4ac9ec21970d014bef72e89a984fc56d7582
                   {Object.keys(groupSettings).map(g => <option key={g} value={g}>{g}</option>)}
                 </select>
               </div>
@@ -307,34 +481,57 @@ function App() {
         })}
       </div>
 
+      {/* DỰ BỊ (Giữ nguyên) */}
       <h2 style={{ color: '#87CEEB', fontSize: '15px', margin: '30px 0 10px 0' }}>DỰ BỊ (30)</h2>
       <div className="team-grid">
         {[...Array(30)].map((_, i) => renderSlotCell('Học việc', i + 1))}
       </div>
 
-      {/* MAP SECTION */}
+      {/* MAP SECTION CẬP NHẬT */}
       <div className="map-section">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
             <h3 style={{ color: 'gold', margin: 0, fontSize: '18px' }}>CHỈ ĐẠO CHIẾN THUẬT</h3>
             {isAdmin && (
               <div style={{ display: 'flex', gap: '8px' }}>
+<<<<<<< HEAD
                 <button onClick={handleUndoMarker} className="map-btn">Hoàn tác</button>
+=======
+                <button onClick={handleUndoMarker} className="map-btn">Hoàn tác (Undo)</button>
+>>>>>>> e35b4ac9ec21970d014bef72e89a984fc56d7582
                 <button onClick={handleResetMarkers} className="map-btn" style={{ borderColor: '#f44' }}>Dọn Map</button>
               </div>
             )}
         </div>
+<<<<<<< HEAD
         <div className="map-container" ref={mapRef} onDragOver={e => e.preventDefault()} onDrop={handleDropNewMarker}>
           <img src="https://i.postimg.cc/SsMMSZLG/unnam2ed.jpg" alt="Map" className="map-bg" />
+=======
+        
+        <div 
+          className="map-container" 
+          ref={mapRef}
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={handleDropNewMarker}
+        >
+          <img src="https://i.postimg.cc/SsMMSZLG/unnam2ed.jpg" alt="Map" className="map-bg" />
+          
+          {/* Team Nodes */}
+>>>>>>> e35b4ac9ec21970d014bef72e89a984fc56d7582
           {[...Array(10)].map((_, i) => {
             const teamId = i + 1;
             const pos = teamPositions[teamId] || { x: 8 * teamId, y: 15 };
             const groupColor = groupSettings[teamGroups[teamId] || 'Nhóm 1'].border;
             return (
+<<<<<<< HEAD
               <div key={`team-${teamId}`} draggable={isAdmin} onDragEnd={e => handleDragEndNode(e, teamId)} className="team-node" style={{ left: `${pos.x}%`, top: `${pos.y}%`, backgroundColor: groupColor }}>
+=======
+              <div key={`team-${teamId}`} draggable={isAdmin} onDragEnd={(e) => handleDragEnd(e, teamId)} className="team-node" style={{ left: `${pos.x}%`, top: `${pos.y}%`, backgroundColor: groupColor === '#444' ? '#fff' : groupColor, cursor: isAdmin ? 'move' : 'default' }}>
+>>>>>>> e35b4ac9ec21970d014bef72e89a984fc56d7582
                 T{teamId}
               </div>
             );
           })}
+<<<<<<< HEAD
           {mapMarkers.map(marker => (
             <div key={marker.id} className="marker-icon" style={{ left: `${marker.pos_x}%`, top: `${marker.pos_y}%` }}>
               {marker.type === 'sword' ? '🗡️' : marker.type === 'shield' ? '🛡️' : '⚠️'}
@@ -351,6 +548,35 @@ function App() {
       </div>
 
       {/* POPUP ACTION (MODIFIED FOR SKILLS) */}
+=======
+
+          {/* Markers (Kiếm, Khiên, Chú ý) */}
+          {mapMarkers.map((marker) => (
+            <div 
+              key={marker.id} 
+              className="marker-icon" 
+              style={{ left: `${marker.pos_x}%`, top: `${marker.pos_y}%` }}
+            >
+              {marker.type === 'sword' ? '🗡️' : marker.type === 'shield' ? '🛡️' : '⚠️'}
+            </div>
+          ))}
+
+          {/* Icon Source (Bottom Right) */}
+          {isAdmin && (
+            <div style={{ position: 'absolute', bottom: '15px', right: '15px', display: 'flex', gap: '10px', zIndex: 100 }}>
+              <div draggable onDragStart={(e) => e.dataTransfer.setData("markerType", "sword")} className="marker-source">🗡️</div>
+              <div draggable onDragStart={(e) => e.dataTransfer.setData("markerType", "shield")} className="marker-source">🛡️</div>
+              <div draggable onDragStart={(e) => e.dataTransfer.setData("markerType", "warn")} className="marker-source">⚠️</div>
+            </div>
+          )}
+        </div>
+        <p style={{ fontSize: '11px', color: '#666', marginTop: '10px' }}>
+            * Đăng nhập admin để sử dụng bản đồ chiến thuật chỉ đạo bang chiến. - Đông Đông
+        </p>
+      </div>
+
+      {/* POPUP ACTION (Giữ nguyên) */}
+>>>>>>> e35b4ac9ec21970d014bef72e89a984fc56d7582
       {selectedMember && (
         <div style={{ position: 'fixed', bottom: '20px', left: '50%', transform: 'translateX(-50%)', background: '#111', padding: '20px', borderRadius: '12px', border: '2px solid gold', zIndex: 1000, width: '90%', maxWidth: '450px', boxShadow: '0 0 30px rgba(0,0,0,0.9)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '15px' }}>
