@@ -37,20 +37,22 @@ function App() {
   const mapRef = useRef(null);
 
   const fetchData = useCallback(async () => {
-    const { data: mems } = await supabase.from('register_list').select('*');
-    const { data: groups } = await supabase.from('team_groups').select('*');
-    const { data: positions } = await supabase.from('team_positions').select('*');
-    const { data: markers } = await supabase.from('map_markers').select('*').order('created_at', { ascending: true });
+    const [mems, groups, positions, markers] = await Promise.all([
+      supabase.from('register_list').select('*'),
+      supabase.from('team_groups').select('*'),
+      supabase.from('team_positions').select('*'),
+      supabase.from('map_markers').select('*').order('created_at', { ascending: true })
+    ]);
     
-    if (mems) setMembers(mems);
-    if (groups) setTeamGroups(Object.fromEntries(groups.map(g => [g.team_id, g.group_name])));
-    if (positions) setTeamPositions(Object.fromEntries(positions.map(p => [p.team_id, { x: p.pos_x, y: p.pos_y }])));
-    if (markers) setMapMarkers(markers);
+    if (mems.data) setMembers(mems.data);
+    if (groups.data) setTeamGroups(Object.fromEntries(groups.data.map(g => [g.team_id, g.group_name])));
+    if (positions.data) setTeamPositions(Object.fromEntries(positions.data.map(p => [p.team_id, { x: p.pos_x, y: p.pos_y }])));
+    if (markers.data) setMapMarkers(markers.data);
   }, []);
 
   useEffect(() => {
     fetchData();
-    const channel = supabase.channel('global-live-sync')
+    const channel = supabase.channel('global-sync')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'register_list' }, fetchData)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'team_groups' }, fetchData)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'team_positions' }, fetchData)
@@ -59,55 +61,53 @@ function App() {
     return () => supabase.removeChannel(channel);
   }, [fetchData]);
 
-  // OPTIMIZED DRAG & DROP LOGIC
-  const handleSlotClick = async (type, slotNum) => {
-    const occupant = members.find(m => m.type === type && m.team_slot === slotNum);
-    
-    if (isAdmin && movingMember) {
-      if (movingMember.type === type && movingMember.team_slot === slotNum) {
-        setMovingMember(null);
-        return;
-      }
+  // TỐI ƯU HOÁN ĐỔI (Optimistic Update)
+  const performSwap = async (targetType, targetSlot) => {
+    if (!movingMember || !isAdmin) return;
 
-      // Optimistic Update UI ngay lập tức
-      const updatedMembers = [...members];
-      const moveIdx = updatedMembers.findIndex(m => m.id === movingMember.id);
-      
-      if (occupant) {
-        const occIdx = updatedMembers.findIndex(m => m.id === occupant.id);
-        // Hoán đổi vị trí
-        updatedMembers[moveIdx] = { ...movingMember, type: occupant.type, team_slot: occupant.team_slot };
-        updatedMembers[occIdx] = { ...occupant, type: movingMember.type, team_slot: movingMember.team_slot };
-        setMembers(updatedMembers);
+    const targetMember = members.find(m => m.type === targetType && m.team_slot === targetSlot);
+    const originalMoving = { ...movingMember };
 
+    // Cập nhật UI ngay lập tức
+    setMembers(prev => prev.map(m => {
+      if (m.id === movingMember.id) return { ...m, type: targetType, team_slot: targetSlot };
+      if (targetMember && m.id === targetMember.id) return { ...m, type: originalMoving.type, team_slot: originalMoving.team_slot };
+      return m;
+    }));
+
+    // Gửi lệnh lên DB
+    try {
+      if (targetMember) {
         await Promise.all([
-          supabase.from('register_list').update({ type: occupant.type, team_slot: occupant.team_slot }).eq('id', movingMember.id),
-          supabase.from('register_list').update({ type: movingMember.type, team_slot: movingMember.team_slot }).eq('id', occupant.id)
+          supabase.from('register_list').update({ type: targetType, team_slot: targetSlot }).eq('id', movingMember.id),
+          supabase.from('register_list').update({ type: originalMoving.type, team_slot: originalMoving.team_slot }).eq('id', targetMember.id)
         ]);
       } else {
-        // Di chuyển vào ô trống
-        updatedMembers[moveIdx] = { ...movingMember, type, team_slot: slotNum };
-        setMembers(updatedMembers);
-        await supabase.from('register_list').update({ type, team_slot: slotNum }).eq('id', movingMember.id);
+        await supabase.from('register_list').update({ type: targetType, team_slot: targetSlot }).eq('id', movingMember.id);
       }
-      
-      setMovingMember(null);
-      setDragOverSlot(null);
-      fetchData(); // Sync lại với DB
+    } catch (err) {
+      fetchData(); // Nếu lỗi thì đồng bộ lại
+    }
+    setMovingMember(null);
+    setDragOverSlot(null);
+  };
+
+  const handleSlotClick = (type, slotNum) => {
+    const occupant = members.find(m => m.type === type && m.team_slot === slotNum);
+    if (isAdmin && movingMember) {
+      performSwap(type, slotNum);
       return;
     }
-
     if (occupant) {
       setSelectedMember(occupant);
       if (isAdmin) setMovingMember(occupant);
       return;
     }
-
     setForm({ ...form, type, team_slot: slotNum });
     setSelectedMember(null);
   };
 
-  // MAP LOGIC
+  // LOGIC MAP & MARKERS
   const handleDropNewMarker = async (e) => {
     if (!isAdmin || !mapRef.current) return;
     const type = e.dataTransfer.getData("markerType");
@@ -119,24 +119,12 @@ function App() {
     fetchData();
   };
 
-  const handleUndoMarker = async () => {
-    if (!isAdmin || mapMarkers.length === 0) return;
-    await supabase.from('map_markers').delete().eq('id', mapMarkers[mapMarkers.length - 1].id);
-    fetchData();
-  };
-
-  const handleResetMarkers = async () => {
-    if (!isAdmin || !window.confirm("Xóa toàn bộ Icon chỉ đạo?")) return;
-    await supabase.from('map_markers').delete().neq('id', 0);
-    fetchData();
-  };
-
   const updateTeamPosition = async (teamId, x, y) => {
     setTeamPositions(prev => ({ ...prev, [teamId]: { x, y } }));
     await supabase.from('team_positions').update({ pos_x: x, pos_y: y }).eq('team_id', teamId);
   };
 
-  const handleDragEndNode = (e, teamId) => {
+  const handleDragEnd = (e, teamId) => {
     if (!mapRef.current) return;
     const rect = mapRef.current.getBoundingClientRect();
     const x = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
@@ -144,49 +132,19 @@ function App() {
     updateTeamPosition(teamId, x, y);
   };
 
+  // ADMIN ACTIONS
   const handleAdminLogin = () => {
-    const pass = prompt("Nhập mật mã Admin:");
-    if (pass === "quymonquan2026") { setIsAdmin(true); alert("ĐÃ KÍCH HOẠT QUYỀN ADMIN!"); }
-    else alert("Sai mật mã!");
-  };
-
-  const handleResetBoard = async () => {
-    if (window.confirm("Xóa sạch danh sách tuần này?")) {
-      const { error } = await supabase.from('register_list').delete().neq('id', 0);
-      if (!error) fetchData();
-    }
-  };
-
-  const toggleItem = async () => {
-    if (!selectedMember) return;
-    await supabase.from('register_list').update({ has_item: !selectedMember.has_item }).eq('id', selectedMember.id);
-    fetchData();
-    setSelectedMember(null);
-  };
-
-  const deleteMember = async () => {
-    if (!selectedMember) return;
-    if (window.confirm(`Xác nhận xóa [${selectedMember.char_name}]?`)) {
-      await supabase.from('register_list').delete().eq('id', selectedMember.id);
-      if (selectedMember.char_name === localStorage.getItem('my_char_name')) localStorage.removeItem('my_char_name');
-      setSelectedMember(null);
-      fetchData();
-    }
+    const pass = prompt("Mật mã:");
+    if (pass === "quymonquan2026") { setIsAdmin(true); alert("ADMIN OK!"); }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.team_slot) return alert("Vui lòng chọn ô Slot!");
+    if (!form.team_slot) return alert("Chọn ô!");
     const savedName = localStorage.getItem('my_char_name');
-    if (!isAdmin && isLimitEnabled && savedName && members.some(m => m.char_name === savedName)) {
-      return alert(`Bạn đã đăng ký nhân vật [${savedName}]. Mỗi người chỉ được 1 ô!`);
-    }
-    const { error } = await supabase.from('register_list').insert([{ ...form, skills: [] }]);
-    if (!error) {
-      localStorage.setItem('my_char_name', form.char_name);
-      setForm({ ...form, char_name: '', team_slot: null });
-      fetchData();
-    }
+    if (!isAdmin && isLimitEnabled && savedName && members.some(m => m.char_name === savedName)) return alert("Đã đăng ký!");
+    const { error } = await supabase.from('register_list').insert([form]);
+    if (!error) { localStorage.setItem('my_char_name', form.char_name); setForm({ ...form, char_name: '', team_slot: null }); fetchData(); }
   };
 
   const renderSlotCell = (type, slotNum) => {
@@ -201,188 +159,129 @@ function App() {
         key={`${type}-${slotNum}`} 
         onClick={() => handleSlotClick(type, slotNum)}
         draggable={isAdmin && !!occupant}
-        onDragStart={(e) => { if(!isAdmin) return; setMovingMember(occupant); e.dataTransfer.setData("memberId", occupant.id); }}
-        onDragOver={(e) => { e.preventDefault(); if(isAdmin) setDragOverSlot(`${type}-${slotNum}`); }}
-        onDrop={(e) => { e.preventDefault(); handleSlotClick(type, slotNum); }}
-        className={`slot-cell ${isHovered ? 'drag-hover' : ''} ${isBeingMoved ? 'moving' : ''}`}
+        onDragStart={(e) => { setMovingMember(occupant); e.dataTransfer.effectAllowed = "move"; }}
+        onDragOver={(e) => { e.preventDefault(); setDragOverSlot(`${type}-${slotNum}`); }}
+        onDrop={(e) => { e.preventDefault(); performSwap(type, slotNum); }}
+        className={`slot-cell ${isHovered ? 'drag-hover' : ''}`}
         style={{
           height: '42px', margin: '3px 0', borderRadius: '4px', position: 'relative',
           backgroundColor: occupant ? classInfo[occupant.class_name]?.color : '#111',
           border: isBeingMoved ? '2px solid white' : isSelected ? '2px solid gold' : isHovered ? '2px dashed #fff' : '1px solid #333',
           display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
           fontSize: '10px', color: occupant?.class_name === 'Long Ngâm' ? '#000' : 'white', fontWeight: 'bold',
-          padding: '0 4px', overflow: 'hidden', transition: 'all 0.1s ease'
+          padding: '0 4px', overflow: 'hidden', opacity: isBeingMoved ? 0.5 : 1
         }}
       >
-        {isLeaderSlot && <span style={{ position: 'absolute', top: '1px', left: '2px', fontSize: '8px', opacity: 0.8 }}>🔑</span>}
-        {occupant ? (
-          <div style={{ textAlign: 'center', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', pointerEvents: 'none' }}>
-            {occupant.char_name} {occupant.has_item && '📦'}
-          </div>
-        ) : `S${slotNum}`}
+        {isLeaderSlot && <span style={{ position: 'absolute', top: '1px', left: '2px', fontSize: '8px' }}>🔑</span>}
+        {occupant ? <div style={{ pointerEvents: 'none' }}>{occupant.char_name} {occupant.has_item && '📦'}</div> : `S${slotNum}`}
       </div>
     );
   };
 
   return (
-    <div style={{ backgroundColor: '#000', color: 'white', minHeight: '100vh', padding: '15px', textAlign: 'center', fontFamily: 'Arial', userSelect: 'none' }}>
+    <div style={{ backgroundColor: '#000', color: 'white', minHeight: '100vh', padding: '15px', textAlign: 'center', fontFamily: 'sans-serif', userSelect: 'none' }}>
       <style>{`
         .team-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; max-width: 1200px; margin: 0 auto; }
         @media (min-width: 1024px) { .team-grid { grid-template-columns: repeat(10, 1fr); } }
-        .group-select { width: 100%; background: #000; color: #fff; border: 1px solid #444; font-size: 10px; border-radius: 3px; cursor: pointer; margin-top: 5px; padding: 3px; font-weight: bold; appearance: none; text-align: center; }
-        .slot-cell.drag-hover { filter: brightness(1.5); transform: scale(1.02); }
-        .map-section { max-width: 900px; margin: 40px auto; padding: 20px; background: #0a0a0a; border-radius: 12px; border: 1px solid #333; position: relative; }
-        .map-container { position: relative; width: 100%; border-radius: 8px; overflow: hidden; border: 2px solid #444; margin-top: 15px; }
-        .map-bg { width: 100%; display: block; opacity: 0.8; pointer-events: none; }
-        .team-node { position: absolute; width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; color: #000; transform: translate(-50%, -50%); border: 2px solid #fff; box-shadow: 0 0 15px rgba(0,0,0,0.8); z-index: 10; }
-        .marker-icon { position: absolute; font-size: 24px; transform: translate(-50%, -50%); z-index: 15; filter: drop-shadow(0 0 5px rgba(0,0,0,1)); }
-        .marker-source { font-size: 28px; cursor: grab; padding: 10px; background: rgba(255,255,255,0.1); border-radius: 8px; border: 1px solid #444; }
-        .map-btn { background: #1a1a1a; color: #ccc; border: 1px solid #444; padding: 4px 8px; border-radius: 4px; font-size: 10px; cursor: pointer; }
-        .skill-slot { width: 45px; height: 45px; background: #222; border: 1px solid #444; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 20px; }
+        .group-select { width: 100%; background: #000; color: #fff; border: 1px solid #444; font-size: 10px; padding: 3px; cursor: pointer; text-align: center; }
+        .map-container { position: relative; width: 100%; border: 2px solid #444; margin-top: 15px; overflow: hidden; }
+        .team-node { position: absolute; width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; color: #000; transform: translate(-50%, -50%); border: 2px solid #fff; z-index: 10; }
+        .marker-icon { position: absolute; font-size: 24px; transform: translate(-50%, -50%); z-index: 15; }
+        .skill-slot { width: 45px; height: 45px; background: rgba(255,255,255,0.1); border: 1px solid #444; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 8px; color: #666; }
       `}</style>
 
       {/* ADMIN CONTROLS */}
-      <div style={{ position: 'absolute', top: '10px', right: '10px', display: 'flex', flexDirection: 'column', gap: '5px', alignItems: 'flex-end', zIndex: 100 }}>
-        <button onClick={handleAdminLogin} style={{ background: isAdmin ? '#d4af37' : 'transparent', color: isAdmin ? '#000' : '#d4af37', border: '1px solid #d4af37', padding: '5px 10px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>
-          {isAdmin ? "ADMIN: ON" : "ADMIN LOGIN"}
+      <div style={{ position: 'absolute', top: '10px', right: '10px', display: 'flex', flexDirection: 'column', gap: '5px' }}>
+        <button onClick={handleAdminLogin} style={{ background: isAdmin ? 'gold' : 'none', color: isAdmin ? '#000' : 'gold', border: '1px solid gold', padding: '5px', borderRadius: '4px', fontSize: '10px' }}>
+          {isAdmin ? "ADMIN: ON" : "LOGIN"}
         </button>
-        {isAdmin && (
-          <>
-            <button onClick={() => setIsLimitEnabled(!isLimitEnabled)} style={{ background: isLimitEnabled ? '#222' : 'red', color: 'white', border: '1px solid #444', padding: '5px 10px', borderRadius: '4px', fontSize: '10px' }}>
-              GIỚI HẠN: {isLimitEnabled ? "BẬT" : "TẮT"}
-            </button>
-            <button onClick={handleResetBoard} style={{ background: 'blue', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '4px', fontSize: '10px' }}>RESET</button>
-          </>
-        )}
       </div>
 
-      <img src="/nth-logo.png" alt="Logo" style={{ width: '60px', margin: '0 auto', display: 'block' }} />
-      <h1 style={{ color: 'gold', fontSize: '20px', margin: '10px 0' }}>BANG QUỶ MÔN QUAN</h1>
+      <h1 style={{ color: 'gold', fontSize: '20px' }}>BANG QUỶ MÔN QUAN</h1>
 
       {/* STATS */}
-      <div style={{ display: 'flex', justifyContent: 'center', gap: '5px', background: '#0a0a0a', padding: '10px', borderRadius: '8px', border: '1px solid #222', marginBottom: '15px', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', background: '#0a0a0a', padding: '10px', borderRadius: '8px', marginBottom: '15px' }}>
         {Object.keys(classInfo).map(cls => (
-          <div key={cls} style={{ borderRight: '1px solid #222', paddingRight: '5px', minWidth: '60px' }}>
-            <div style={{ color: classInfo[cls].color, fontSize: '10px', fontWeight: 'bold' }}>{cls}</div>
-            <div style={{ fontSize: '14px' }}>{members.filter(m => m.class_name === cls).length}</div>
+          <div key={cls} style={{ borderRight: '1px solid #222', paddingRight: '5px' }}>
+            <div style={{ color: classInfo[cls].color, fontSize: '9px' }}>{cls}</div>
+            <div style={{ fontSize: '12px' }}>{members.filter(m => m.class_name === cls).length}</div>
           </div>
         ))}
-        <div style={{ paddingLeft: '8px', borderLeft: '2px solid #333' }}>
-          <div style={{ fontSize: '10px', fontWeight: 'bold', color: '#00FF00' }}>QUÂN SỐ: {officialCount} / 60</div>
+        <div style={{ color: '#00FF00', paddingLeft: '10px' }}>
+          <div style={{ fontSize: '9px' }}>QUÂN SỐ</div>
+          <div style={{ fontSize: '12px' }}>{members.filter(m => m.char_name && m.type === 'Chính thức').length}/60</div>
         </div>
       </div>
-      
-      {/* REGISTER FORM */}
-      <form onSubmit={handleSubmit} style={{ marginBottom: '25px' }}>
-        <input style={{ padding: '10px', background: '#111', color: 'white', border: '1px solid #333', borderRadius: '4px', width: '160px' }} placeholder="Tên..." value={form.char_name} onChange={e => setForm({...form, char_name: e.target.value})} required />
-        <select style={{ padding: '10px', background: '#111', color: 'white', border: '1px solid #333', margin: '0 5px', borderRadius: '4px' }} value={form.class_name} onChange={e => setForm({...form, class_name: e.target.value})}>
+
+      <form onSubmit={handleSubmit} style={{ marginBottom: '20px' }}>
+        <input style={{ padding: '8px', background: '#111', color: 'white', border: '1px solid #333' }} placeholder="Tên..." value={form.char_name} onChange={e => setForm({...form, char_name: e.target.value})} required />
+        <select style={{ padding: '8px', background: '#111', color: 'white', border: '1px solid #333', margin: '0 5px' }} value={form.class_name} onChange={e => setForm({...form, class_name: e.target.value})}>
           {Object.keys(classInfo).map(c => <option key={c} value={c}>{c}</option>)}
         </select>
-        <button type="submit" style={{ padding: '10px 15px', background: 'gold', border: 'none', borderRadius: '4px', fontWeight: 'bold' }}>
-            ĐĂNG KÝ {form.team_slot ? `(S${form.team_slot})` : ''}
-        </button>
+        <button type="submit" style={{ padding: '8px', background: 'gold', fontWeight: 'bold' }}>ĐĂNG KÝ {form.team_slot ? `(S${form.team_slot})` : ''}</button>
       </form>
 
-      {/* MAIN TEAMS */}
       <div className="team-grid">
-        {[...Array(10)].map((_, col) => {
-          const teamNum = col + 1;
-          const currentGroup = teamGroups[teamNum] || 'Nhóm 1';
-          const settings = groupSettings[currentGroup];
-          return (
-            <div key={col} style={{ background: settings.bg, padding: '8px', borderRadius: '8px', border: `2px solid ${settings.border}` }}>
-              <div style={{ marginBottom: '6px' }}>
-                <span style={{ color: settings.label, fontSize: '11px', fontWeight: 'bold' }}>TEAM {teamNum}</span>
-                <select className="group-select" value={currentGroup} disabled={!isAdmin} onChange={e => {
-                  const newGroup = e.target.value;
-                  setTeamGroups(prev => ({ ...prev, [teamNum]: newGroup }));
-                  supabase.from('team_groups').update({ group_name: newGroup }).eq('team_id', teamNum).then(() => fetchData());
-                }}>
-                  {Object.keys(groupSettings).map(g => <option key={g} value={g}>{g}</option>)}
-                </select>
-              </div>
-              {[...Array(6)].map((_, row) => renderSlotCell('Chính thức', col * 6 + row + 1))}
-            </div>
-          );
-        })}
+        {[...Array(10)].map((_, col) => (
+          <div key={col} style={{ background: groupSettings[teamGroups[col+1] || 'Nhóm 1'].bg, padding: '5px', borderRadius: '8px', border: `2px solid ${groupSettings[teamGroups[col+1] || 'Nhóm 1'].border}` }}>
+            <div style={{ fontSize: '10px', color: groupSettings[teamGroups[col+1] || 'Nhóm 1'].label }}>TEAM {col+1}</div>
+            {[...Array(6)].map((_, row) => renderSlotCell('Chính thức', col * 6 + row + 1))}
+          </div>
+        ))}
       </div>
 
-      <h2 style={{ color: '#87CEEB', fontSize: '15px', margin: '30px 0 10px 0' }}>DỰ BỊ (30)</h2>
+      {/* DỰ BỊ */}
+      <h2 style={{ fontSize: '14px', color: '#87CEEB', margin: '20px 0' }}>DỰ BỊ (30)</h2>
       <div className="team-grid">
         {[...Array(30)].map((_, i) => renderSlotCell('Học việc', i + 1))}
       </div>
 
-      {/* MAP SECTION */}
-      <div className="map-section">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-            <h3 style={{ color: 'gold', margin: 0, fontSize: '18px' }}>CHỈ ĐẠO CHIẾN THUẬT</h3>
-            {isAdmin && (
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button onClick={handleUndoMarker} className="map-btn">Hoàn tác</button>
-                <button onClick={handleResetMarkers} className="map-btn" style={{ borderColor: '#f44' }}>Dọn Map</button>
-              </div>
-            )}
-        </div>
+      {/* MAP */}
+      <div style={{ maxWidth: '900px', margin: '40px auto', background: '#0a0a0a', padding: '15px', borderRadius: '12px' }}>
+        <h3 style={{ color: 'gold' }}>BẢN ĐỒ CHIẾN THUẬT</h3>
         <div className="map-container" ref={mapRef} onDragOver={e => e.preventDefault()} onDrop={handleDropNewMarker}>
-          <img src="https://i.postimg.cc/SsMMSZLG/unnam2ed.jpg" alt="Map" className="map-bg" />
+          <img src="https://i.postimg.cc/SsMMSZLG/unnam2ed.jpg" alt="Map" style={{ width: '100%', opacity: 0.7 }} />
+          {mapMarkers.map(m => <div key={m.id} className="marker-icon" style={{ left: `${m.pos_x}%`, top: `${m.pos_y}%` }}>{m.type === 'sword' ? '🗡️' : m.type === 'shield' ? '🛡️' : '⚠️'}</div>)}
           {[...Array(10)].map((_, i) => {
-            const teamId = i + 1;
-            const pos = teamPositions[teamId] || { x: 8 * teamId, y: 15 };
-            const groupColor = groupSettings[teamGroups[teamId] || 'Nhóm 1'].border;
-            return (
-              <div key={`team-${teamId}`} draggable={isAdmin} onDragEnd={e => handleDragEndNode(e, teamId)} className="team-node" style={{ left: `${pos.x}%`, top: `${pos.y}%`, backgroundColor: groupColor }}>
-                T{teamId}
-              </div>
-            );
+            const pos = teamPositions[i+1] || { x: 8 * (i+1), y: 15 };
+            return <div key={i} draggable={isAdmin} onDragEnd={e => handleDragEnd(e, i+1)} className="team-node" style={{ left: `${pos.x}%`, top: `${pos.y}%`, backgroundColor: groupSettings[teamGroups[i+1] || 'Nhóm 1'].border }}>T{i+1}</div>
           })}
-          {mapMarkers.map(marker => (
-            <div key={marker.id} className="marker-icon" style={{ left: `${marker.pos_x}%`, top: `${marker.pos_y}%` }}>
-              {marker.type === 'sword' ? '🗡️' : marker.type === 'shield' ? '🛡️' : '⚠️'}
-            </div>
-          ))}
           {isAdmin && (
-            <div style={{ position: 'absolute', bottom: '15px', right: '15px', display: 'flex', gap: '10px' }}>
-              <div draggable onDragStart={e => e.dataTransfer.setData("markerType", "sword")} className="marker-source">🗡️</div>
-              <div draggable onDragStart={e => e.dataTransfer.setData("markerType", "shield")} className="marker-source">🛡️</div>
-              <div draggable onDragStart={e => e.dataTransfer.setData("markerType", "warn")} className="marker-source">⚠️</div>
+            <div style={{ position: 'absolute', bottom: '10px', right: '10px', display: 'flex', gap: '5px' }}>
+              <div draggable onDragStart={e => e.dataTransfer.setData("markerType", "sword")} style={{ cursor: 'grab', fontSize: '20px' }}>🗡️</div>
+              <div draggable onDragStart={e => e.dataTransfer.setData("markerType", "shield")} style={{ cursor: 'grab', fontSize: '20px' }}>🛡️</div>
+              <div draggable onDragStart={e => e.dataTransfer.setData("markerType", "warn")} style={{ cursor: 'grab', fontSize: '20px' }}>⚠️</div>
             </div>
           )}
         </div>
       </div>
 
-      {/* POPUP ACTION (MODIFIED FOR SKILLS) */}
+      {/* POPUP: THÔNG TIN THÀNH VIÊN & 5 Ô KỸ NĂNG */}
       {selectedMember && (
-        <div style={{ position: 'fixed', bottom: '20px', left: '50%', transform: 'translateX(-50%)', background: '#111', padding: '20px', borderRadius: '12px', border: '2px solid gold', zIndex: 1000, width: '90%', maxWidth: '450px', boxShadow: '0 0 30px rgba(0,0,0,0.9)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '15px' }}>
-            <div style={{ textAlign: 'left' }}>
-              <div style={{ fontSize: '20px', fontWeight: 'bold', color: 'gold' }}>{selectedMember.char_name}</div>
-              <div style={{ fontSize: '12px', color: classInfo[selectedMember.class_name]?.color }}>{selectedMember.class_name} • {selectedMember.type}</div>
-            </div>
-            {isAdmin && <div style={{ fontSize: '10px', color: '#666' }}>ADMIN MODE</div>}
-          </div>
-
-          <div style={{ marginBottom: '20px' }}>
-            <div style={{ fontSize: '11px', color: '#aaa', textAlign: 'left', marginBottom: '8px', fontWeight: 'bold' }}>KỸ NĂNG TRANG BỊ:</div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px' }}>
-              {[...Array(5)].map((_, i) => (
-                <div key={i} className="skill-slot" style={{ borderStyle: isAdmin ? 'dashed' : 'solid', cursor: isAdmin ? 'pointer' : 'default' }}>
-                  {selectedMember.skills?.[i] || <span style={{ opacity: 0.2, fontSize: '12px' }}>{i+1}</span>}
-                </div>
-              ))}
-            </div>
-            {isAdmin && <div style={{ fontSize: '9px', color: 'gold', marginTop: '5px', textAlign: 'left' }}>* Admin: Nhấn vào ô kỹ năng để thay đổi (Sắp ra mắt)</div>}
+        <div style={{ position: 'fixed', bottom: '20px', left: '50%', transform: 'translateX(-50%)', background: '#111', padding: '20px', borderRadius: '15px', border: '2px solid gold', zIndex: 1001, width: '90%', maxWidth: '400px', boxShadow: '0 0 20px rgba(0,0,0,0.9)' }}>
+          <div style={{ fontSize: '18px', fontWeight: 'bold', color: classInfo[selectedMember.class_name].color, marginBottom: '5px' }}>{selectedMember.char_name}</div>
+          <div style={{ fontSize: '12px', color: '#aaa', marginBottom: '15px' }}>Hệ: {selectedMember.class_name} | {selectedMember.type}</div>
+          
+          {/* BẢNG KỸ NĂNG (Gồm 5 ô) */}
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '10px', marginBottom: '20px', background: 'rgba(0,0,0,0.3)', padding: '10px', borderRadius: '8px' }}>
+            {[1, 2, 3, 4, 5].map(i => (
+              <div key={i} className="skill-slot" style={{ border: isAdmin ? '1px dashed gold' : '1px solid #444', cursor: isAdmin ? 'pointer' : 'default' }}>
+                {/* Sau này sẽ hiển thị icon kỹ năng ở đây */}
+                {isAdmin ? 'Chọn' : 'Trống'}
+              </div>
+            ))}
           </div>
 
           <div style={{ display: 'flex', gap: '10px' }}>
             {(isAdmin || selectedMember.char_name === localStorage.getItem('my_char_name')) && (
               <>
-                <button onClick={toggleItem} style={{ flex: 1, background: selectedMember.has_item ? '#444' : '#28a745', color: 'white', border: 'none', padding: '12px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>
-                    {selectedMember.has_item ? "BỎ VẬT TƯ" : "VẬT TƯ 📦"}
+                <button onClick={async () => { await supabase.from('register_list').update({ has_item: !selectedMember.has_item }).eq('id', selectedMember.id); fetchData(); setSelectedMember(null); }} style={{ flex: 1, background: '#28a745', color: 'white', border: 'none', padding: '10px', borderRadius: '6px' }}>
+                  {selectedMember.has_item ? "BỎ VẬT TƯ" : "VẬT TƯ 📦"}
                 </button>
-                <button onClick={deleteMember} style={{ flex: 1, background: '#dc3545', color: 'white', border: 'none', padding: '12px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>XÓA</button>
+                <button onClick={async () => { if (window.confirm("Xóa?")) { await supabase.from('register_list').delete().eq('id', selectedMember.id); fetchData(); setSelectedMember(null); } }} style={{ background: '#dc3545', color: 'white', border: 'none', padding: '10px', borderRadius: '6px' }}>XÓA</button>
               </>
             )}
-            <button onClick={() => { setSelectedMember(null); setMovingMember(null); }} style={{ background: '#333', color: 'white', border: 'none', padding: '12px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>ĐÓNG</button>
+            <button onClick={() => setSelectedMember(null)} style={{ background: '#333', color: 'white', border: 'none', padding: '10px', borderRadius: '6px' }}>ĐÓNG</button>
           </div>
         </div>
       )}
