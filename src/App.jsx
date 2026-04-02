@@ -185,13 +185,20 @@ function App() {
   };
 
   // --- HÀM QUẢN LÝ KHO SKILL (CHỈ ADMIN) ---
-  const addToLibrary = async (url) => {
-    if (!isAdmin) return alert("Chỉ Admin mới có quyền chỉnh sửa kho skill!");
+const addToLibrary = async (url) => {
+    if (!isAdmin) return alert("Chỉ Admin mới có quyền chỉnh sửa!");
     if (!url) return;
-    const { error } = await supabase.from('skill_library').insert([{ url }]);
-    if (!error) {
+    
+    console.log("Đang tải dữ liệu lên Supabase...");
+    const { data, error } = await supabase.from('skill_library').insert([{ url }]);
+    
+    if (error) {
+      console.error("Lỗi Supabase:", error.message);
+      alert("Lỗi khi lưu vào DB: " + error.message);
+    } else {
+      console.log("Tải lên thành công!");
       setCustomSkillUrl('');
-      fetchData();
+      fetchData(); // Cập nhật lại giao diện
     }
   };
 
@@ -203,12 +210,22 @@ function App() {
     }
   };
 
-  const handleFileChange = (e) => {
-    if (!isAdmin) return alert("Chỉ Admin mới có quyền tải ảnh vào kho!");
+ const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (!file) return;
+
+    // Kiểm tra dung lượng file (Giới hạn dưới 1MB để tránh lỗi chuỗi quá dài)
+    if (file.size > 1024 * 1024) {
+      alert("File quá lớn! Vui lòng chọn ảnh dưới 1MB.");
+      return;
+    }
+
     const reader = new FileReader();
-    reader.onloadend = () => addToLibrary(reader.result);
+    reader.onloadend = () => {
+      console.log("Đã đọc file xong, chuẩn bị gửi...");
+      addToLibrary(reader.result);
+    };
+    reader.onerror = () => alert("Lỗi khi đọc file!");
     reader.readAsDataURL(file);
   };
 
