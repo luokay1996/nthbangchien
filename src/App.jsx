@@ -1,12 +1,13 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 
+// --- CẤU HÌNH KẾT NỐI ---
 const supabase = createClient(
   import.meta.env.VITE_SUPABASE_URL,
   import.meta.env.VITE_SUPABASE_ANON_KEY
 );
 
-// Danh sách link icon kỹ năng (Bạn có thể thay đổi link hình ảnh tại đây)
+// --- DỮ LIỆU CỐ ĐỊNH ---
 const SKILL_ICONS = [
   "https://i.postimg.cc/DfDDfmVs/Screenshot-2026-04-02-232308.png",
   "https://i.postimg.cc/nV55VM8m/Screenshot-2026-04-02-232315.png",
@@ -39,161 +40,16 @@ function App() {
   const [isLimitEnabled, setIsLimitEnabled] = useState(true);
   const [movingMember, setMovingMember] = useState(null);
   const [selectedMember, setSelectedMember] = useState(null);
-  const [memberSkills, setMemberSkills] = useState([]); // State lưu kỹ năng
+  const [memberSkills, setMemberSkills] = useState([]); 
   const [form, setForm] = useState({ char_name: '', class_name: 'Toái Mộng', team_slot: null, type: 'Chính thức' });
   const [teamGroups, setTeamGroups] = useState({});
   const [teamPositions, setTeamPositions] = useState({});
   const mapRef = useRef(null);
 
-  const fetchData = useCallback(async () => {
-    const { data: mems } = await supabase.from('register_list').select('*');
-    const { data: groups } = await supabase.from('team_groups').select('*');
-    const { data: positions } = await supabase.from('team_positions').select('*');
-    const { data: skills } = await supabase.from('member_skills').select('*');
-
-    if (mems) setMembers(mems);
-    if (skills) setMemberSkills(skills);
-    if (groups) {
-      const groupMap = Object.fromEntries(groups.map(g => [g.team_id, g.group_name]));
-      setTeamGroups(groupMap);
-    }
-    if (positions) {
-      const posMap = Object.fromEntries(positions.map(p => [p.team_id, { x: p.pos_x, y: p.pos_y }]));
-      setTeamPositions(posMap);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchData();
-    const channel = supabase.channel('global-live-sync')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'register_list' }, fetchData)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'team_groups' }, fetchData)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'team_positions' }, fetchData)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'member_skills' }, fetchData)
-      .subscribe();
-    return () => supabase.removeChannel(channel);
-  }, [fetchData]);
-
-  // --- LOGIC KỸ NĂNG ---
-  const addSkillToMember = async (url) => {
-    if (!selectedMember) return;
-    const current = memberSkills.filter(s => s.member_id === selectedMember.id);
-    if (current.length >= 5) return alert("Tối đa 5 kỹ năng!");
-    
-    // Tìm vị trí ô trống đầu tiên (0-4)
-    let slot = 0;
-    for (let i = 0; i < 5; i++) {
-      if (!current.find(s => parseInt(s.pos_x) === i)) {
-        slot = i;
-        break;
-      }
-    }
-    
-    await supabase.from('member_skills').insert([{ 
-      member_id: selectedMember.id, 
-      skill_url: url, 
-      pos_x: slot, 
-      pos_y: 0 
-    }]);
-    fetchData();
-  };
-
-  const removeSkill = async (skillId) => {
-    await supabase.from('member_skills').delete().eq('id', skillId);
-    fetchData();
-  };
-
-  // --- LOGIC CŨ ---
-  const updateTeamPosition = async (teamId, x, y) => {
-    setTeamPositions(prev => ({ ...prev, [teamId]: { x, y } }));
-    await supabase.from('team_positions').update({ pos_x: x, pos_y: y }).eq('team_id', teamId);
-  };
-
-  const handleDragEnd = (e, teamId) => {
-    if (!mapRef.current) return;
-    const rect = mapRef.current.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width) * 100;
-    const y = ((e.clientY - rect.top) / rect.height) * 100;
-    updateTeamPosition(teamId, Math.max(0, Math.min(100, x)), Math.max(0, Math.min(100, y)));
-  };
-
-  const handleGroupChange = async (teamId, newGroupName) => {
-    if (!isAdmin) return;
-    setTeamGroups(prev => ({ ...prev, [teamId]: newGroupName }));
-    await supabase.from('team_groups').update({ group_name: newGroupName }).eq('team_id', teamId);
-  };
-
-  const handleAdminLogin = () => {
-    const pass = prompt("Nhập mật mã Admin:");
-    if (pass === "quymonquan2026") { setIsAdmin(true); alert("ĐÃ KÍCH HOẠT!"); }
-    else alert("Sai mật mã!");
-  };
-
-  const handleResetBoard = async () => {
-    if (window.confirm("Xóa sạch danh sách?")) {
-      await supabase.from('register_list').delete().neq('id', 0);
-      await supabase.from('member_skills').delete().neq('id', 0);
-      fetchData();
-    }
-  };
-
-  const toggleItem = async () => {
-    if (!selectedMember) return;
-    await supabase.from('register_list').update({ has_item: !selectedMember.has_item }).eq('id', selectedMember.id);
-    fetchData();
-    setSelectedMember(null);
-  };
-
-  const handleSlotClick = async (type, slotNum) => {
-    const occupant = members.find(m => m.type === type && m.team_slot === slotNum);
-    if (isAdmin && movingMember) {
-      if (movingMember.id === occupant?.id) { setMovingMember(null); return; }
-      if (occupant) {
-        await Promise.all([
-          supabase.from('register_list').update({ type: occupant.type, team_slot: occupant.team_slot }).eq('id', movingMember.id),
-          supabase.from('register_list').update({ type: movingMember.type, team_slot: movingMember.team_slot }).eq('id', occupant.id)
-        ]);
-      } else {
-        await supabase.from('register_list').update({ type, team_slot: slotNum }).eq('id', movingMember.id);
-      }
-      setMovingMember(null);
-      fetchData();
-      return;
-    }
-    if (occupant) {
-      setSelectedMember(occupant);
-      if (isAdmin) setMovingMember(occupant);
-      return;
-    }
-    setForm({ ...form, type, team_slot: slotNum });
-    setSelectedMember(null);
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!form.team_slot) return alert("Chọn ô Slot!");
-    const savedName = localStorage.getItem('my_char_name');
-    if (!isAdmin && isLimitEnabled && savedName && members.some(m => m.char_name === savedName)) {
-      return alert("Bạn đã đăng ký rồi!");
-    }
-    const { error } = await supabase.from('register_list').insert([form]);
-    if (!error) {
-      localStorage.setItem('my_char_name', form.char_name);
-      setForm({ ...form, char_name: '', team_slot: null });
-      fetchData();
-    }
-  };
-
-  const deleteMember = async () => {
-    if (!selectedMember) return;
-    if (window.confirm(`Xóa [${selectedMember.char_name}]?`)) {
-      await supabase.from('register_list').delete().eq('id', selectedMember.id);
-      if (selectedMember.char_name === localStorage.getItem('my_char_name')) localStorage.removeItem('my_char_name');
-      setSelectedMember(null);
-      fetchData();
-    }
-  };
-
+  // ==========================================
+  // PHẦN 1: GIAO DIỆN NGƯỜI DÙNG (RENDER UI)
+  // ==========================================
+  
   const renderSlotCell = (type, slotNum) => {
     const occupant = members.find(m => m.type === type && m.team_slot === slotNum);
     const isSelected = form.type === type && form.team_slot === slotNum;
@@ -231,14 +87,14 @@ function App() {
         .map-container { position: relative; width: 100%; border-radius: 8px; overflow: hidden; border: 2px solid #444; margin-top: 15px; }
         .map-bg { width: 100%; display: block; opacity: 0.8; pointer-events: none; }
         .team-node { position: absolute; width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; color: #000; cursor: move; transform: translate(-50%, -50%); border: 2px solid #fff; box-shadow: 0 0 15px rgba(0,0,0,0.8); z-index: 10; transition: transform 0.1s; touch-action: none; }
-        .skill-box-equipped { width: 50px; height: 50px; background: #222; border: 1px solid #444; border-radius: 6px; position: relative; overflow: visible; }
+        .skill-box-equipped { width: 50px; height: 50px; background: #222; border: 1px solid #444; border-radius: 6px; position: relative; overflow: visible; display: flex; align-items: center; justifyContent: center; }
         .skill-img { width: 100%; height: 100%; border-radius: 5px; object-fit: cover; }
-        .btn-del-skill { position: absolute; top: -8px; right: -8px; background: red; color: white; width: 18px; height: 18px; border-radius: 50%; font-size: 12px; display: flex; alignItems: center; justifyContent: center; cursor: pointer; border: 1px solid white; z-index: 5; }
+        .btn-del-skill { position: absolute; top: -8px; right: -8px; background: red; color: white; width: 18px; height: 18px; border-radius: 50%; font-size: 12px; display: flex; align-items: center; justify-content: center; cursor: pointer; border: 1px solid white; z-index: 5; }
         .skill-lib-item { width: 45px; height: 45px; cursor: pointer; border-radius: 6px; border: 1px solid #333; transition: transform 0.1s; }
         .skill-lib-item:hover { transform: scale(1.1); border-color: gold; }
       `}</style>
 
-      {/* ADMIN */}
+      {/* NÚT ADMIN */}
       <div style={{ position: 'absolute', top: '10px', right: '10px', display: 'flex', flexDirection: 'column', gap: '5px', alignItems: 'flex-end', zIndex: 100 }}>
         <button onClick={handleAdminLogin} style={{ background: isAdmin ? '#d4af37' : 'transparent', color: isAdmin ? '#000' : '#d4af37', border: '1px solid #d4af37', padding: '5px 10px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>{isAdmin ? "ADMIN: ON" : "ADMIN LOGIN"}</button>
         {isAdmin && <button onClick={handleResetBoard} style={{ background: 'blue', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '4px', fontSize: '10px' }}>RESET</button>}
@@ -246,7 +102,7 @@ function App() {
 
       <h1 style={{ color: 'gold', fontSize: '20px', margin: '10px 0' }}>BANG QUỶ MÔN QUAN</h1>
 
-      {/* STATS */}
+      {/* THỐNG KÊ */}
       <div style={{ display: 'flex', justifyContent: 'center', gap: '5px', background: '#0a0a0a', padding: '10px', borderRadius: '8px', border: '1px solid #222', marginBottom: '15px', flexWrap: 'wrap' }}>
         {Object.keys(classInfo).map(cls => (
           <div key={cls} style={{ borderRight: '1px solid #222', paddingRight: '5px', minWidth: '60px' }}>
@@ -256,7 +112,7 @@ function App() {
         ))}
       </div>
       
-      {/* FORM */}
+      {/* FORM ĐĂNG KÝ */}
       <form onSubmit={handleSubmit} style={{ marginBottom: '25px' }}>
         <input style={{ padding: '10px', background: '#111', color: 'white', border: '1px solid #333', borderRadius: '4px', width: '160px' }} placeholder="Tên..." value={form.char_name} onChange={e => setForm({...form, char_name: e.target.value})} required />
         <select style={{ padding: '10px', background: '#111', color: 'white', border: '1px solid #333', margin: '0 5px', borderRadius: '4px' }} value={form.class_name} onChange={e => setForm({...form, class_name: e.target.value})}>
@@ -265,7 +121,7 @@ function App() {
         <button type="submit" style={{ padding: '10px 15px', background: 'gold', border: 'none', borderRadius: '4px', fontWeight: 'bold' }}>ĐĂNG KÝ {form.team_slot ? `(S${form.team_slot})` : ''}</button>
       </form>
 
-      {/* TEAMS */}
+      {/* DANH SÁCH TEAM CHÍNH THỨC */}
       <div className="team-grid">
         {[...Array(10)].map((_, col) => {
           const teamNum = col + 1;
@@ -283,10 +139,11 @@ function App() {
         })}
       </div>
 
+      {/* DANH SÁCH DỰ BỊ */}
       <h2 style={{ color: '#87CEEB', fontSize: '15px', margin: '30px 0 10px 0' }}>DỰ BỊ</h2>
       <div className="team-grid">{[...Array(30)].map((_, i) => renderSlotCell('Học việc', i + 1))}</div>
 
-      {/* MAP */}
+      {/* BẢN ĐỒ CHIẾN THUẬT */}
       <div className="map-section">
         <div className="map-container" ref={mapRef}>
           <img src="https://i.postimg.cc/SsMMSZLG/unnam2ed.jpg" alt="Map" className="map-bg" />
@@ -303,7 +160,7 @@ function App() {
         </div>
       </div>
 
-      {/* --- POPUP KỸ NĂNG NÂNG CẤP --- */}
+      {/* POP-UP CHI TIẾT NHÂN VẬT & KỸ NĂNG */}
       {selectedMember && (
         <div style={{ position: 'fixed', bottom: '20px', left: '50%', transform: 'translateX(-50%)', background: '#111', padding: '20px', borderRadius: '15px', border: '2px solid gold', zIndex: 1000, width: '95%', maxWidth: '450px', boxShadow: '0 0 40px #000' }}>
           <div style={{ marginBottom: '15px' }}>
@@ -311,19 +168,17 @@ function App() {
              <div style={{ fontSize: '11px', color: '#666' }}>{selectedMember.class_name} | {selectedMember.type}</div>
           </div>
 
-          {/* Kho kỹ năng (Dành cho chủ sở hữu hoặc Admin) */}
-          {(isAdmin || selectedMember.char_name === localStorage.getItem('my_char_name')) && (
-            <div style={{ marginBottom: '20px', padding: '10px', background: '#1a1a1a', borderRadius: '8px' }}>
-              <div style={{ fontSize: '10px', color: 'gold', marginBottom: '8px', fontWeight: 'bold' }}>KHO KỸ NĂNG (Bấm để thêm)</div>
-              <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap' }}>
-                {SKILL_ICONS.map((url, idx) => (
-                  <img key={idx} src={url} onClick={() => addSkillToMember(url)} className="skill-lib-item" alt="skill" />
-                ))}
-              </div>
+          {/* Kho kỹ năng (Dành cho MỌI NGƯỜI) */}
+          <div style={{ marginBottom: '20px', padding: '10px', background: '#1a1a1a', borderRadius: '8px' }}>
+            <div style={{ fontSize: '10px', color: 'gold', marginBottom: '8px', fontWeight: 'bold' }}>KHO KỸ NĂNG (Bấm để thêm)</div>
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap' }}>
+              {SKILL_ICONS.map((url, idx) => (
+                <img key={idx} src={url} onClick={() => addSkillToMember(url)} className="skill-lib-item" alt="skill" />
+              ))}
             </div>
-          )}
+          </div>
 
-          {/* Hiển thị 5 ô kỹ năng */}
+          {/* Hiển thị 5 ô kỹ năng (Gỡ được bởi MỌI NGƯỜI) */}
           <div style={{ display: 'flex', justifyContent: 'center', gap: '10px', marginBottom: '25px' }}>
             {[0, 1, 2, 3, 4].map(slot => {
               const skill = memberSkills.find(s => s.member_id === selectedMember.id && parseInt(s.pos_x) === slot);
@@ -332,11 +187,9 @@ function App() {
                   {skill ? (
                     <>
                       <img src={skill.skill_url} className="skill-img" alt="equipped" />
-                      {(isAdmin || selectedMember.char_name === localStorage.getItem('my_char_name')) && (
-                        <div className="btn-del-skill" onClick={() => removeSkill(skill.id)}>×</div>
-                      )}
+                      <div className="btn-del-skill" onClick={() => removeSkill(skill.id)}>×</div>
                     </>
-                  ) : <div style={{ color: '#333', marginTop: '15px', fontSize: '14px' }}>+</div>}
+                  ) : <div style={{ color: '#333', fontSize: '14px' }}>+</div>}
                 </div>
               );
             })}
@@ -355,6 +208,158 @@ function App() {
       )}
     </div>
   );
+
+  // ==========================================
+  // PHẦN 2: LOGIC XỬ LÝ (FUNCTIONS)
+  // ==========================================
+
+  async function fetchData() {
+    const { data: mems } = await supabase.from('register_list').select('*');
+    const { data: groups } = await supabase.from('team_groups').select('*');
+    const { data: positions } = await supabase.from('team_positions').select('*');
+    const { data: skills } = await supabase.from('member_skills').select('*');
+
+    if (mems) setMembers(mems);
+    if (skills) setMemberSkills(skills);
+    if (groups) {
+      const groupMap = Object.fromEntries(groups.map(g => [g.team_id, g.group_name]));
+      setTeamGroups(groupMap);
+    }
+    if (positions) {
+      const posMap = Object.fromEntries(positions.map(p => [p.team_id, { x: p.pos_x, y: p.pos_y }]));
+      setTeamPositions(posMap);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+    const channel = supabase.channel('global-live-sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'register_list' }, fetchData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'team_groups' }, fetchData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'team_positions' }, fetchData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'member_skills' }, fetchData)
+      .subscribe();
+    return () => supabase.removeChannel(channel);
+  }, []);
+
+  // --- LOGIC KỸ NĂNG (ĐÃ MỞ KHÓA CHO TẤT CẢ) ---
+  async function addSkillToMember(url) {
+    if (!selectedMember) return;
+    const current = memberSkills.filter(s => s.member_id === selectedMember.id);
+    if (current.length >= 5) return alert("Tối đa 5 kỹ năng!");
+    
+    let slot = 0;
+    for (let i = 0; i < 5; i++) {
+      if (!current.find(s => parseInt(s.pos_x) === i)) {
+        slot = i;
+        break;
+      }
+    }
+    
+    await supabase.from('member_skills').insert([{ 
+      member_id: selectedMember.id, 
+      skill_url: url, 
+      pos_x: slot, 
+      pos_y: 0 
+    }]);
+    fetchData();
+  };
+
+  async function removeSkill(skillId) {
+    await supabase.from('member_skills').delete().eq('id', skillId);
+    fetchData();
+  };
+
+  // --- LOGIC CŨ ---
+  async function updateTeamPosition(teamId, x, y) {
+    setTeamPositions(prev => ({ ...prev, [teamId]: { x, y } }));
+    await supabase.from('team_positions').update({ pos_x: x, pos_y: y }).eq('team_id', teamId);
+  };
+
+  function handleDragEnd(e, teamId) {
+    if (!mapRef.current) return;
+    const rect = mapRef.current.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 100;
+    const y = ((e.clientY - rect.top) / rect.height) * 100;
+    updateTeamPosition(teamId, Math.max(0, Math.min(100, x)), Math.max(0, Math.min(100, y)));
+  };
+
+  async function handleGroupChange(teamId, newGroupName) {
+    if (!isAdmin) return;
+    setTeamGroups(prev => ({ ...prev, [teamId]: newGroupName }));
+    await supabase.from('team_groups').update({ group_name: newGroupName }).eq('team_id', teamId);
+  };
+
+  function handleAdminLogin() {
+    const pass = prompt("Nhập mật mã Admin:");
+    if (pass === "quymonquan2026") { setIsAdmin(true); alert("ĐÃ KÍCH HOẠT!"); }
+    else alert("Sai mật mã!");
+  };
+
+  async function handleResetBoard() {
+    if (window.confirm("Xóa sạch danh sách?")) {
+      await supabase.from('register_list').delete().neq('id', 0);
+      await supabase.from('member_skills').delete().neq('id', 0);
+      fetchData();
+    }
+  };
+
+  async function toggleItem() {
+    if (!selectedMember) return;
+    await supabase.from('register_list').update({ has_item: !selectedMember.has_item }).eq('id', selectedMember.id);
+    fetchData();
+    setSelectedMember(null);
+  };
+
+  async function handleSlotClick(type, slotNum) {
+    const occupant = members.find(m => m.type === type && m.team_slot === slotNum);
+    if (isAdmin && movingMember) {
+      if (movingMember.id === occupant?.id) { setMovingMember(null); return; }
+      if (occupant) {
+        await Promise.all([
+          supabase.from('register_list').update({ type: occupant.type, team_slot: occupant.team_slot }).eq('id', movingMember.id),
+          supabase.from('register_list').update({ type: movingMember.type, team_slot: movingMember.team_slot }).eq('id', occupant.id)
+        ]);
+      } else {
+        await supabase.from('register_list').update({ type, team_slot: slotNum }).eq('id', movingMember.id);
+      }
+      setMovingMember(null);
+      fetchData();
+      return;
+    }
+    if (occupant) {
+      setSelectedMember(occupant);
+      if (isAdmin) setMovingMember(occupant);
+      return;
+    }
+    setForm({ ...form, type, team_slot: slotNum });
+    setSelectedMember(null);
+  };
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    if (!form.team_slot) return alert("Chọn ô Slot!");
+    const savedName = localStorage.getItem('my_char_name');
+    if (!isAdmin && isLimitEnabled && savedName && members.some(m => m.char_name === savedName)) {
+      return alert("Bạn đã đăng ký rồi!");
+    }
+    const { error } = await supabase.from('register_list').insert([form]);
+    if (!error) {
+      localStorage.setItem('my_char_name', form.char_name);
+      setForm({ ...form, char_name: '', team_slot: null });
+      fetchData();
+    }
+  };
+
+  async function deleteMember() {
+    if (!selectedMember) return;
+    if (window.confirm(`Xóa [${selectedMember.char_name}]?`)) {
+      await supabase.from('register_list').delete().eq('id', selectedMember.id);
+      if (selectedMember.char_name === localStorage.getItem('my_char_name')) localStorage.removeItem('my_char_name');
+      setSelectedMember(null);
+      fetchData();
+    }
+  };
 }
 
 export default App;
