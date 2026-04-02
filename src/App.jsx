@@ -33,19 +33,96 @@ const groupSettings = {
   'Nhóm 4': { bg: 'rgba(255, 69, 0, 0.15)', border: '#ff4500', label: '#ff4500' },
 };
 
+// COMPONENT POP-UP TÁCH RIÊNG (GIỮ NGUYÊN LOGIC GỐC)
+const MemberDetailPopup = ({ 
+  selectedMember, 
+  setSelectedMember, 
+  memberSkills, 
+  SKILL_ICONS, 
+  dropZoneRef, 
+  handleDropOnZone, 
+  handleStartDragExisting, 
+  handleStartDragFromLibrary, 
+  deleteSkill, 
+  toggleItem, 
+  deleteMember, 
+  isAdmin 
+}) => {
+  if (!selectedMember) return null;
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ background: '#111', padding: '20px', borderRadius: '20px', border: '2px solid gold', width: '95%', maxWidth: '500px', boxShadow: '0 0 30px rgba(212, 175, 55, 0.3)' }}>
+        
+        <div style={{ fontWeight: 'bold', color: 'gold', fontSize: '22px', textShadow: '0 0 10px rgba(255,215,0,0.5)', marginBottom: '10px' }}>
+          {selectedMember.char_name}
+        </div>
+
+        {/* VÙNG ĐEN: NƠI THẢ ICON XUỐNG */}
+        <div 
+          ref={dropZoneRef}
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={handleDropOnZone}
+          style={{ position: 'relative', height: '260px', background: '#000', borderRadius: '12px', border: '2px dashed #333', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+        >
+          <div style={{ fontSize: '11px', color: '#444', pointerEvents: 'none' }}>Kéo Icon từ kho và thả vào đây</div>
+          
+          {memberSkills.filter(s => s.member_id === selectedMember.id).map(skill => (
+            <img 
+              key={skill.id}
+              src={skill.skill_url}
+              draggable
+              onDragStart={(e) => handleStartDragExisting(e, skill.id)}
+              onDoubleClick={() => deleteSkill(skill.id)}
+              className="skill-icon-float"
+              style={{ left: `${skill.pos_x}%`, top: `${skill.pos_y}%` }}
+            />
+          ))}
+        </div>
+
+        {/* KHO KỸ NĂNG: NƠI CHỨA ICON GỐC */}
+        <div style={{ marginTop: '20px', padding: '15px', background: '#1a1a1a', borderRadius: '10px', border: '1px solid #333' }}>
+          <div style={{ fontSize: '12px', color: 'gold', marginBottom: '10px', fontWeight: 'bold' }}>KHO KỸ NĂNG (Kéo icon xuống)</div>
+          <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
+            {SKILL_ICONS.map((url, idx) => (
+              <img 
+                key={idx} 
+                src={url} 
+                draggable
+                onDragStart={(e) => handleStartDragFromLibrary(e, url)}
+                className="skill-library-icon"
+              />
+            ))}
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+          {(isAdmin || selectedMember.char_name === localStorage.getItem('my_char_name')) && (
+            <>
+              <button onClick={toggleItem} style={{ flex: 1, background: selectedMember.has_item ? '#444' : '#28a745', color: 'white', border: 'none', padding: '12px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>VẬT TƯ 📦</button>
+              <button onClick={deleteMember} style={{ background: '#dc3545', color: 'white', border: 'none', padding: '12px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>XÓA</button>
+            </>
+          )}
+          <button onClick={() => setSelectedMember(null)} style={{ background: '#333', color: 'white', border: 'none', padding: '12px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>ĐÓNG</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 function App() {
   const [members, setMembers] = useState([]);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isLimitEnabled, setIsLimitEnabled] = useState(true);
   const [movingMember, setMovingMember] = useState(null);
   const [selectedMember, setSelectedMember] = useState(null);
-  const [memberSkills, setMemberSkills] = useState([]); // State mới cho icon
+  const [memberSkills, setMemberSkills] = useState([]); 
   const [form, setForm] = useState({ char_name: '', class_name: 'Toái Mộng', team_slot: null, type: 'Chính thức' });
   const [teamGroups, setTeamGroups] = useState({});
   const [teamPositions, setTeamPositions] = useState({});
   const mapRef = useRef(null);
   const popupRef = useRef(null);
-  const dropZoneRef = useRef(null); // Ref cho vùng đen thả icon
+  const dropZoneRef = useRef(null); 
 
   const fetchData = useCallback(async () => {
     const { data: mems } = await supabase.from('register_list').select('*');
@@ -76,14 +153,10 @@ function App() {
     return () => supabase.removeChannel(channel);
   }, [fetchData]);
 
-  // --- LOGIC KÉO THẢ KHO KỸ NĂNG ---
-
-  // 1. Khi bắt đầu kéo từ kho (Dùng HTML5 Drag and Drop)
   const handleStartDragFromLibrary = (e, url) => {
     e.dataTransfer.setData("skillUrl", url);
   };
 
-  // 2. Thả vào vùng đen (Vùng chèn mới hoặc cập nhật vị trí)
   const handleDropOnZone = async (e) => {
     e.preventDefault();
     if (!selectedMember || !dropZoneRef.current) return;
@@ -98,7 +171,6 @@ function App() {
     const skillId = e.dataTransfer.getData("skillId");
 
     if (skillUrl) {
-      // Nếu có URL -> Đây là kéo từ KHO vào (thêm mới)
       await supabase.from('member_skills').insert([{ 
         member_id: selectedMember.id, 
         skill_url: skillUrl, 
@@ -106,13 +178,11 @@ function App() {
         pos_y: safeY 
       }]);
     } else if (skillId) {
-      // Nếu có ID -> Đây là kéo icon ĐÃ CÓ trong vùng đen để đổi chỗ
       await supabase.from('member_skills').update({ pos_x: safeX, pos_y: safeY }).eq('id', skillId);
     }
     fetchData();
   };
 
-  // 3. Khi bắt đầu kéo icon đã có sẵn trong vùng đen
   const handleStartDragExisting = (e, skillId) => {
     e.dataTransfer.setData("skillId", skillId);
   };
@@ -121,8 +191,6 @@ function App() {
     await supabase.from('member_skills').delete().eq('id', skillId);
     fetchData();
   };
-
-  // --- KẾT THÚC LOGIC KÉO THẢ ---
 
   const updateTeamPosition = async (teamId, x, y) => {
     setTeamPositions(prev => ({ ...prev, [teamId]: { x, y } }));
@@ -338,64 +406,21 @@ function App() {
         </div>
       </div>
 
-      {selectedMember && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div ref={popupRef} style={{ background: '#111', padding: '20px', borderRadius: '20px', border: '2px solid gold', width: '95%', maxWidth: '500px', boxShadow: '0 0 30px rgba(212, 175, 55, 0.3)' }}>
-            
-            <div style={{ fontWeight: 'bold', color: 'gold', fontSize: '22px', textShadow: '0 0 10px rgba(255,215,0,0.5)', marginBottom: '10px' }}>
-              {selectedMember.char_name}
-            </div>
+      <MemberDetailPopup 
+        selectedMember={selectedMember}
+        setSelectedMember={setSelectedMember}
+        memberSkills={memberSkills}
+        SKILL_ICONS={SKILL_ICONS}
+        dropZoneRef={dropZoneRef}
+        handleDropOnZone={handleDropOnZone}
+        handleStartDragExisting={handleStartDragExisting}
+        handleStartDragFromLibrary={handleStartDragFromLibrary}
+        deleteSkill={deleteSkill}
+        toggleItem={toggleItem}
+        deleteMember={deleteMember}
+        isAdmin={isAdmin}
+      />
 
-            {/* VÙNG ĐEN: NƠI THẢ ICON XUỐNG */}
-            <div 
-              ref={dropZoneRef}
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={handleDropOnZone}
-              style={{ position: 'relative', height: '260px', background: '#000', borderRadius: '12px', border: '2px dashed #333', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-            >
-              <div style={{ fontSize: '11px', color: '#444', pointerEvents: 'none' }}>Kéo Icon từ kho và thả vào đây</div>
-              
-              {memberSkills.filter(s => s.member_id === selectedMember.id).map(skill => (
-                <img 
-                  key={skill.id}
-                  src={skill.skill_url}
-                  draggable
-                  onDragStart={(e) => handleStartDragExisting(e, skill.id)}
-                  onDoubleClick={() => deleteSkill(skill.id)}
-                  className="skill-icon-float"
-                  style={{ left: `${skill.pos_x}%`, top: `${skill.pos_y}%` }}
-                />
-              ))}
-            </div>
-
-            {/* KHO KỸ NĂNG: NƠI CHỨA ICON GỐC */}
-            <div style={{ marginTop: '20px', padding: '15px', background: '#1a1a1a', borderRadius: '10px', border: '1px solid #333' }}>
-              <div style={{ fontSize: '12px', color: 'gold', marginBottom: '10px', fontWeight: 'bold' }}>KHO KỸ NĂNG (Kéo icon xuống)</div>
-              <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
-                {SKILL_ICONS.map((url, idx) => (
-                  <img 
-                    key={idx} 
-                    src={url} 
-                    draggable
-                    onDragStart={(e) => handleStartDragFromLibrary(e, url)}
-                    className="skill-library-icon"
-                  />
-                ))}
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
-              {(isAdmin || selectedMember.char_name === localStorage.getItem('my_char_name')) && (
-                <>
-                  <button onClick={toggleItem} style={{ flex: 1, background: selectedMember.has_item ? '#444' : '#28a745', color: 'white', border: 'none', padding: '12px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>VẬT TƯ 📦</button>
-                  <button onClick={deleteMember} style={{ background: '#dc3545', color: 'white', border: 'none', padding: '12px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>XÓA</button>
-                </>
-              )}
-              <button onClick={() => setSelectedMember(null)} style={{ background: '#333', color: 'white', border: 'none', padding: '12px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>ĐÓNG</button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
