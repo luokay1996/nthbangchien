@@ -7,13 +7,13 @@ const supabase = createClient(
 );
 
 const classInfo = {
-  'Toái Mộng': { color: '#7FB9CF' },
-  'Thiết Y': { color: '#D89A58' },
-  'Huyết Hà': { color: '#9B4A42' },
+  'Toái Mộng': { color: '#80C7E6' },
+  'Thiết Y': { color: '#E6A35C' },
+  'Huyết Hà': { color: '#A3534A' },
   'Thần Tương': { color: '#5E7FAF' }, 
-  'Tố Vấn': { color: '#E58AA0' },
-  'Cửu Linh': { color: '#A56AC3' },
-  'Long Ngâm': { color: '#7FC4C3' },
+  'Tố Vấn': { color: '#F28E99' },
+  'Cửu Linh': { color: '#B36BB3' },
+  'Long Ngâm': { color: '#8CB36B' },
 };
 
 const groupSettings = {
