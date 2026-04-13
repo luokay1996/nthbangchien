@@ -99,7 +99,7 @@ function App() {
 
   const handleAdminLogin = () => {
     const pass = prompt("Nhập mật mã Admin:");
-    if (pass === "quymonquan2026") { 
+    if (pass === "minhnguyetcung2026") { 
       setIsAdmin(true); 
       alert("ĐÃ KÍCH HOẠT QUYỀN ADMIN!"); 
     } else { 
