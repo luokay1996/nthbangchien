@@ -18,7 +18,7 @@ const classInfo = {
 
 const groupSettings = {
   'Đoàn 1': { bg: 'rgba(255, 255, 255, 0.05)', border: '#7cd826', label: '#7cd826' },
-  'Đoàn 2': { bg: 'rgba(0, 255, 255, 0.12)', border: '#0011ff', label: '#00ffff' },
+  'Đoàn 2': { bg: 'rgba(0, 255, 255, 0.12)', border: '#00ffff', label: '#00ffff' },
   'Đoàn 3': { bg: 'rgba(255, 215, 0, 0.12)', border: '#ffd700', label: '#ffd700' },
   'Đoàn 4': { bg: 'rgba(255, 69, 0, 0.15)', border: '#ff4500', label: '#ff4500' },
 };
@@ -29,6 +29,7 @@ function App() {
   const [movingMember, setMovingMember] = useState(null);
 
   const [selectedMember, setSelectedMember] = useState(null);
+  const [form, setForm] = useState({ char_name: '', class_name: 'Toái Mộng', team_slot: null, type: 'Chính thức' });
   const [teamGroups, setTeamGroups] = useState({});
   const [teamPositions, setTeamPositions] = useState([]); 
   
@@ -41,6 +42,10 @@ function App() {
   const [newCharName, setNewCharName] = useState('');
   const [newClassName, setNewClassName] = useState('Toái Mộng');
   const [searchUnassigned, setSearchUnassigned] = useState('');
+  
+  // Trạng thái cho khu vực nhập danh sách thô bằng text hành loạt
+  const [bulkText, setBulkText] = useState('');
+  const [bulkClass, setBulkClass] = useState('Toái Mộng');
 
   const mapRef = useRef(null);
 
@@ -127,12 +132,18 @@ function App() {
     }
   };
 
+  // Cải tiến hàm Reset tuần: Chỉ gỡ vị trí và skill chứ không xóa dữ liệu danh sách thành viên gốc (Reset không mất danh sách chờ)
   const handleResetBoard = async () => {
     if (!isAdmin) return;
-    if (window.confirm("Xóa sạch danh sách tuần này?")) {
+    if (window.confirm("Xóa sạch sơ đồ và vị trí tuần này? (Danh sách thành viên chờ vẫn sẽ được giữ lại)")) {
       await supabase.from('member_skills').delete().neq('id', 0);
       await supabase.from('team_positions').delete().neq('id', 0);
-      const { error } = await supabase.from('register_list').delete().neq('id', 0);
+      const { error } = await supabase.from('register_list').update({
+        team_slot: null,
+        has_item: false,
+        is_scout: false,
+        is_tower_team: false
+      }).neq('id', 0);
       if (!error) fetchData();
     }
   };
@@ -200,14 +211,13 @@ function App() {
       return;
     }
 
-    // Khi click ô trống, kích hoạt giao diện modal chọn thay vì hiện prompt gõ chữ
     setAssigningSlot({ type, slotNum });
     setNewCharName('');
     setNewClassName('Toái Mộng');
     setSearchUnassigned('');
+    setBulkText('');
   };
 
-  // Đưa một thành viên đã đăng ký (chưa có vị trí) vào ô trống vừa chọn
   const assignExistingMember = async (memberId) => {
     if (!assigningSlot) return;
     const { type, slotNum } = assigningSlot;
@@ -218,7 +228,6 @@ function App() {
     }
   };
 
-  // Tạo mới trực tiếp một thành viên ngay tại ô trống đó
   const handleCreateAndAssign = async (e) => {
     e.preventDefault();
     if (!newCharName.trim() || !assigningSlot) return;
@@ -233,6 +242,44 @@ function App() {
     if (!error) {
       setAssigningSlot(null);
       fetchData();
+    }
+  };
+
+  // Hàm xử lý nạp danh sách thô hành loạt từ Admin (Phân tách bằng dấu phẩy hoặc dòng mới)
+  const handleBulkInsert = async () => {
+    if (!bulkText.trim()) return;
+    
+    // Tách chuỗi văn bản dựa trên dấu phẩy hoặc xuống dòng
+    const names = bulkText
+      .split(/[\n,]+/)
+      .map(name => name.trim())
+      .filter(name => name.length > 0);
+
+    if (names.length === 0) return;
+
+    // Lọc bỏ trùng lặp với database hiện tại để tránh lỗi dữ liệu trùng
+    const existingNames = members.map(m => m.char_name.toLowerCase());
+    const newObjects = names
+      .filter(name => !existingNames.includes(name.toLowerCase()))
+      .map(name => ({
+        char_name: name,
+        class_name: bulkClass,
+        team_slot: null,
+        type: 'Chính thức'
+      }));
+
+    if (newObjects.length === 0) {
+      alert("Tất cả các tên bạn nhập đều đã tồn tại trong danh sách!");
+      return;
+    }
+
+    const { error } = await supabase.from('register_list').insert(newObjects);
+    if (!error) {
+      alert(`Đã thêm thành công ${newObjects.length} thành viên vào danh sách chờ!`);
+      setBulkText('');
+      fetchData();
+    } else {
+      alert("Có lỗi xảy ra khi đồng bộ database!");
     }
   };
 
@@ -303,7 +350,7 @@ function App() {
 
   const deleteMember = async () => {
     if (!isAdmin || !selectedMember) return;
-    if (window.confirm(`Xác nhận xóa [${selectedMember.char_name}]?`)) {
+    if (window.confirm(`Xác nhận xóa hẳn [${selectedMember.char_name}] khỏi hệ thống?`)) {
       await supabase.from('member_skills').delete().eq('member_id', selectedMember.id);
       const { error } = await supabase.from('register_list').delete().eq('id', selectedMember.id);
       if (!error) {
@@ -331,7 +378,6 @@ function App() {
   const totalScoutsCount = members.filter(m => m.char_name && m.is_scout).length;
   const totalTowersCount = members.filter(m => m.char_name && m.is_tower_team).length;
 
-  // Lấy ra những thành viên đã có trong database nhưng chưa được xếp vào hàng ngũ (không có team_slot)
   const unassignedMembers = members.filter(m => !m.team_slot && m.char_name);
 
   const renderSlotCell = (type, slotNum) => {
@@ -394,9 +440,9 @@ function App() {
         .skill-lib-item:hover { border-color: gold; transform: scale(1.1); }
         .lib-remove-btn { position: absolute; top: -5px; right: -5px; background: black; color: red; border: 1px solid red; border-radius: 50%; width: 16px; height: 16px; font-size: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 5; }
         .custom-add-skill { display: flex; gap: 5px; margin-top: 10px; padding: 0 10px; }
-        .custom-input { flex: 1; background: #000; border: 1px solid #444; color: white; padding: 6px; border-radius: 4px; _font-size: 11px; }
-        .upload-btn { background: #333; color: white; border: 1px solid #555; padding: 6px 10px; border-radius: 4px; cursor: pointer; _font-size: 11px; font-weight: bold; }
-        .add-btn { background: #d4af37; color: black; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; _font-size: 11px; font-weight: bold; }
+        .custom-input { flex: 1; background: #000; border: 1px solid #444; color: white; padding: 6px; border-radius: 4px; }
+        .upload-btn { background: #333; color: white; border: 1px solid #555; padding: 6px 10px; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        .add-btn { background: #d4af37; color: black; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold; }
         
         .member-select-chip { padding: 6px 10px; border-radius: 4px; font-size: 11px; font-weight: bold; cursor: pointer; text-align: center; border: 1px solid rgba(255,255,255,0.1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: white; }
         .member-select-chip:hover { border-color: #fff; transform: scale(1.03); }
@@ -528,19 +574,19 @@ function App() {
         </div>
       </div>
 
-      {/* MODAL GIAO DIỆN CHỌN NHANH THÀNH VIÊN (THAY CHO PROMPT) */}
+      {/* MODAL GIAO DIỆN CHỌN NHANH & NẠP VĂN BẢN HÀNG LOẠT */}
       {assigningSlot && isAdmin && (
-        <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', background: '#141414', padding: '20px', borderRadius: '12px', border: '2px solid gold', zIndex: 1100, width: '90%', maxWidth: '500px', boxShadow: '0 0 40px rgba(0,0,0,0.9)', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', background: '#141414', padding: '20px', borderRadius: '12px', border: '2px solid gold', zIndex: 1100, width: '90%', maxWidth: '520px', boxShadow: '0 0 40px rgba(0,0,0,0.9)', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
           <div style={{ fontSize: '15px', fontWeight: 'bold', color: 'gold', marginBottom: '12px' }}>
             XẾP THÀNH VIÊN VÀO Ô [S{assigningSlot.slotNum} - {assigningSlot.type}]
           </div>
 
-          {/* DANH SÁCH THÀNH VIÊN TRỐNG CHƯA VÀO ĐỘI */}
-          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden', minHeight: '180px', marginBottom: '15px', background: '#0a0a0a', padding: '10px', borderRadius: '8px', border: '1px solid #222' }}>
+          {/* KHO THÀNH VIÊN CHỜ & THANH TÌM KIẾM NHANH */}
+          <div style={{ display: 'flex', flexDirection: 'column', height: '180px', marginBottom: '12px', background: '#0a0a0a', padding: '10px', borderRadius: '8px', border: '1px solid #222', overflow: 'hidden' }}>
             <div style={{ fontSize: '11px', color: '#888', textAlign: 'left', marginBottom: '6px', fontWeight: 'bold' }}>
-              BẤM VÀO TÊN ĐỂ ĐƯA VÀO ĐỘI (DANH SÁCH CHỜ TỪ DISCORD):
+              BẤM VÀO TÊN ĐỂ ĐƯA VÀO ĐỘI (DANH SÁCH CHỜ):
             </div>
-            <input className="custom-input" style={{ marginBottom: '10px', flex: 'none', fontSize: '11px' }} placeholder="Tìm nhanh tên thành viên..." value={searchUnassigned} onChange={(e) => setSearchUnassigned(e.target.value)} />
+            <input className="custom-input" style={{ marginBottom: '8px', flex: 'none', fontSize: '11px' }} placeholder="Tìm nhanh tên thành viên..." value={searchUnassigned} onChange={(e) => setSearchUnassigned(e.target.value)} />
             
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', overflowY: 'auto', flex: 1, padding: '2px' }}>
               {unassignedMembers
@@ -551,24 +597,44 @@ function App() {
                   </div>
                 ))}
               {unassignedMembers.filter(m => m.char_name.toLowerCase().includes(searchUnassigned.toLowerCase())).length === 0 && (
-                <div style={{ gridColumn: 'span 3', color: '#555', fontSize: '11px', padding: '20px 0' }}>Không tìm thấy thành viên trống phù hợp...</div>
+                <div style={{ gridColumn: 'span 3', color: '#555', fontSize: '11px', padding: '15px 0' }}>Không tìm thấy thành viên trống...</div>
               )}
             </div>
           </div>
 
-          {/* FORM THÊM MỚI TRỰC TIẾP TRÊN GIAO DIỆN NẾU CHƯA CÓ TRONG KHO */}
-          <form onSubmit={handleCreateAndAssign} style={{ borderTop: '1px solid #222', paddingTop: '12px', textAlign: 'left' }}>
-            <div style={{ fontSize: '11px', color: '#888', marginBottom: '6px', fontWeight: 'bold' }}>HOẶC TẠO MỚI HOÀN TOÀN TẠI Ô NÀY:</div>
-            <div style={{ display: 'flex', gap: '6px' }}>
-              <input className="custom-input" style={{ fontSize: '11px' }} required placeholder="Nhập tên nhân vật..." value={newCharName} onChange={(e) => setNewCharName(e.target.value)} />
-              <select className="custom-input" style={{ maxWidth: '120px', cursor: 'pointer', fontSize: '11px' }} value={newClassName} onChange={(e) => setNewClassName(e.target.value)}>
+          {/* KHU VỰC THÊM TEXT HÀNG LOẠT ĐỂ UPDATE VÀO KHO DỰ TRỮ (KHÔNG BỊ MẤT KHI RESET) */}
+          <div style={{ borderTop: '1px solid #222', paddingTop: '10px', marginBottom: '12px', textAlign: 'left' }}>
+            <div style={{ fontSize: '11px', color: 'gold', marginBottom: '5px', fontWeight: 'bold' }}>PASTE DANH SÁCH TEXT HÀNG LOẠT VÀO KHO CHỜ:</div>
+            <textarea 
+              style={{ width: '100%', height: '55px', background: '#000', border: '1px solid #444', borderRadius: '4px', color: '#fff', padding: '5px', fontSize: '11px', resize: 'none', fontFamily: 'monospace' }}
+              placeholder="Dán danh sách tên từ Excel/Word vào đây... (Ngăn cách bằng dấu phẩy hoặc Xuống dòng)"
+              value={bulkText}
+              onChange={(e) => setBulkText(e.target.value)}
+            />
+            <div style={{ display: 'flex', gap: '6px', marginTop: '5px', alignItems: 'center' }}>
+              <span style={{ fontSize: '10px', color: '#aaa' }}>Gán phái tạm thời:</span>
+              <select className="custom-input" style={{ maxWidth: '110px', padding: '3px', fontSize: '11px', height: '26px' }} value={bulkClass} onChange={(e) => setBulkClass(e.target.value)}>
                 {Object.keys(classInfo).map(cls => <option key={cls} value={cls}>{cls}</option>)}
               </select>
-              <button type="submit" className="add-btn" style={{ height: '31px', fontSize: '11px' }}>THÊM</button>
+              <button type="button" onClick={handleBulkInsert} style={{ background: '#28a745', color: '#fff', border: 'none', borderRadius: '4px', padding: '4px 12px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', height: '26px', marginLeft: 'auto' }}>
+                NẠP VÀO KHO CHỜ
+              </button>
+            </div>
+          </div>
+
+          {/* FORM TẠO ĐƠN LẺ */}
+          <form onSubmit={handleCreateAndAssign} style={{ borderTop: '1px solid #222', paddingTop: '10px', textAlign: 'left' }}>
+            <div style={{ fontSize: '11px', color: '#888', marginBottom: '5px', fontWeight: 'bold' }}>HOẶC TẠO MỚI 1 NGƯỜI TRỰC TIẾP VÀO Ô:</div>
+            <div style={{ display: 'flex', gap: '6px' }}>
+              <input className="custom-input" style={{ fontSize: '11px', padding: '5px' }} required placeholder="Nhập tên..." value={newCharName} onChange={(e) => setNewCharName(e.target.value)} />
+              <select className="custom-input" style={{ maxWidth: '110px', cursor: 'pointer', fontSize: '11px' }} value={newClassName} onChange={(e) => setNewClassName(e.target.value)}>
+                {Object.keys(classInfo).map(cls => <option key={cls} value={cls}>{cls}</option>)}
+              </select>
+              <button type="submit" className="add-btn" style={{ fontSize: '11px', padding: '5px 12px' }}>THÊM MỚI</button>
             </div>
           </form>
 
-          <button type="button" onClick={() => setAssigningSlot(null)} style={{ background: '#333', color: 'white', border: 'none', padding: '8px', borderRadius: '6px', fontWeight: 'bold', marginTop: '15px', width: '100%', cursor: 'pointer' }}>ĐÓNG</button>
+          <button type="button" onClick={() => setAssigningSlot(null)} style={{ background: '#333', color: 'white', border: 'none', padding: '8px', borderRadius: '6px', fontWeight: 'bold', marginTop: '12px', width: '100%', cursor: 'pointer', fontSize: '12px' }}>ĐÓNG GIAO DIỆN</button>
         </div>
       )}
 
@@ -603,7 +669,7 @@ function App() {
             </div>
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginBottom: '20px', background: 'rgba(0,0,0,0.4)', padding: '10px', borderRadius: '8px' }}>
+          <div style={{ display: 'flex', justify-content: 'center', gap: '8px', marginBottom: '20px', background: 'rgba(0,0,0,0.4)', padding: '10px', borderRadius: '8px' }}>
             {[0, 1, 2, 3, 4].map(i => {
               const skill = memberSkills.find(s => s.member_id === selectedMember.id && parseInt(s.pos_x) === i);
               return (
@@ -611,7 +677,7 @@ function App() {
                   {skill ? (
                     <>
                       <img src={skill.skill_url} style={{ width: '100%', height: '100%', borderRadius: '6px' }} alt="equipped" />
-                      <div onClick={() => removeSkillFromMember(skill.id)} style={{ position: 'absolute', top: '-5px', right: '-5px', background: 'red', color: 'white', width: '18px', height: '18px', borderRadius: '50%', fontSize: '11px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyCenter: 'center', fontWeight: 'bold', border: '1px solid white' }}>×</div>
+                      <div onClick={() => removeSkillFromMember(skill.id)} style={{ position: 'absolute', top: '-5px', right: '-5px', background: 'red', color: 'white', width: '18px', height: '18px', borderRadius: '50%', fontSize: '11px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', border: '1px solid white' }}>×</div>
                     </>
                   ) : 'Trống'}
                 </div>
