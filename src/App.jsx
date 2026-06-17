@@ -18,8 +18,8 @@ const classInfo = {
 
 const groupSettings = {
   'Đoàn 1': { bg: 'rgba(255, 255, 255, 0.05)', border: '#7cd826', label: '#7cd826' },
-  'Đoàn 2': { bg: 'rgba(0, 255, 255, 0.12)', border: '#ae14dd', label: '#00ffff' },
-  'Đoàn 3': { bg: 'rgba(255, 215, 0, 0.12)', border: '#0400ff', label: '#ffd700' },
+  'Đoàn 2': { bg: 'rgba(0, 255, 255, 0.12)', border: '#00ffff', label: '#00ffff' },
+  'Đoàn 3': { bg: 'rgba(255, 215, 0, 0.12)', border: '#ffd700', label: '#ffd700' },
   'Đoàn 4': { bg: 'rgba(255, 69, 0, 0.15)', border: '#ff4500', label: '#ff4500' },
 };
 
@@ -366,11 +366,14 @@ function App() {
     fetchData();
   };
 
+  // HÀM ĐÃ ĐƯỢC SỬA: Chỉ xóa khỏi ô sơ đồ (Đưa về danh sách chờ) chứ không xóa khỏi hệ thống
   const deleteMember = async () => {
     if (!isAdmin || !selectedMember) return;
-    if (window.confirm(`Xác nhận xóa hẳn [${selectedMember.char_name}] khỏi hệ thống?`)) {
-      await supabase.from('member_skills').delete().eq('member_id', selectedMember.id);
-      const { error } = await supabase.from('register_list').delete().eq('id', selectedMember.id);
+    if (window.confirm(`Xác nhận xóa [${selectedMember.char_name}] khỏi vị trí ô sơ đồ? (Họ sẽ quay lại danh sách chờ)`)) {
+      const { error } = await supabase.from('register_list').update({ 
+        team_slot: null 
+      }).eq('id', selectedMember.id);
+      
       if (!error) {
         setSelectedMember(null);
         fetchData();
@@ -446,7 +449,7 @@ function App() {
   return (
     <div className="app-container" style={{ backgroundColor: '#000', color: 'white', minHeight: '100vh', padding: '15px', textAlign: 'center', fontFamily: 'Arial', userSelect: 'none' }}>
       <style>{`
-        /* --- GIAO DIỆN MOBILE / MẶC ĐỊNH (GIỮ NGUYÊN) --- */
+        /* --- GIAO DIỆN MOBILE / MẶC ĐỊNH --- */
         .app-container { max-width: 100%; margin: 0 auto; }
         .header-stats { display: flex; justify-content: center; gap: 5px; background: #0a0a0a; padding: 10px; borderRadius: '8px'; border: 1px solid #222; marginBottom: '15px'; flex-wrap: wrap; }
         .team-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; max-width: 100%; margin: 0 auto; }
@@ -461,7 +464,7 @@ function App() {
         .team-node { 
           position: absolute; border-radius: 50%; 
           display: flex; flex-direction: column; align-items: center; justify-content: center; 
-          font-size: 13px; font-weight: bold; color: #000; cursor: move; 
+          font-size: 13px; font-weight: bold; cursor: move; 
           transform: translate(-50%, -50%); border: 2px solid #fff; 
           box-shadow: 0 0 15px rgba(0,0,0,0.8);
           z-index: 10; transition: transform 0.1s;
@@ -496,15 +499,14 @@ function App() {
           .team-grid { grid-template-columns: repeat(10, 1fr); } 
         }
 
-        /* --- CẤU HÌNH PHÓNG TO / FULL TRANG TRÊN PC (ỨNG VỚI ZOOM ~175%) --- */
+        /* --- CẤU HÌNH PHÓNG TO / FULL TRANG TRÊN PC --- */
         @media (min-width: 1400px) {
           .app-container {
-            max-width: 98vw; /* Co giãn chiếm gần trọn chiều ngang trình duyệt */
+            max-width: 98vw;
             padding: 25px !important;
           }
           h1 { font-size: 36px !important; margin: 20px 0 !important; }
           
-          /* Khu vực Thống kê phía trên rộng ra và chữ to hơn */
           .header-stats {
             padding: 18px !important;
             font-size: 16px !important;
@@ -513,16 +515,14 @@ function App() {
           .header-stats div div { font-size: 14px !important; }
           .header-stats div div:last-child { font-size: 20px !important; }
 
-          /* Lưới 10 Team bung rộng, tăng khoảng cách các cột */
           .team-grid {
             max-width: 100% !important;
             gap: 12px !important;
           }
           
-          /* Ô thành viên cao hơn, chữ to, dễ đọc đúng tỷ lệ zoom lớn */
           .slot-cell {
-            height: 62px !important; /* Tăng từ 42px lên 62px */
-            font-size: 15px !important; /* Chữ to rõ ràng hơn hẳn */
+            height: 62px !important;
+            font-size: 15px !important;
             margin: 5px 0 !important;
           }
           .leader-icon {
@@ -536,7 +536,6 @@ function App() {
             margin-top: 8px !important;
           }
 
-          /* Danh sách chờ và Sơ đồ bản đồ chiến thuật cũng phóng lớn theo */
           .waiting-box {
             max-width: 100% !important;
             padding: 25px !important;
@@ -552,7 +551,7 @@ function App() {
           }
 
           .map-section {
-            max-width: 1300px !important; /* Cho phép bản đồ to hẳn ra trên PC */
+            max-width: 1300px !important;
           }
           .map-section h3 { font-size: 26px !important; }
         }
@@ -710,7 +709,7 @@ function App() {
                 style={{ 
                   left: `${pos.pos_x}%`, top: `${pos.pos_y}%`, 
                   backgroundColor: bg,
-                  color: (pos.marker_type === 'Đoàn 1' || pos.marker_type === 'scout') ? '#000' : '#fff',
+                  color: '#000', /* MOD ĐÃ ĐỔI: Chữ hiển thị số đếm luôn luôn màu đen */
                   cursor: isAdmin ? 'move' : 'default'
                 }}
               >
@@ -886,7 +885,8 @@ function App() {
                 <button type="button" onClick={toggleItem} style={{ flex: 1, background: selectedMember.has_item ? '#444' : '#28a745', color: 'white', border: 'none', padding: '10px', borderRadius: '6px', fontWeight: 'bold' }}>
                     {selectedMember.has_item ? "BỎ VẬT TƯ" : "VẬT TƯ 📦"}
                 </button>
-                <button type="button" onClick={deleteMember} style={{ background: '#dc3545', color: 'white', border: 'none', padding: '10px', borderRadius: '6px', fontWeight: 'bold' }}>XÓA HẲN</button>
+                {/* MOD ĐÃ ĐỔI: Tên nút chuyển từ "XÓA HẲN" sang "XÓA KHỎI Ô", khi bấm sẽ đưa member về list chờ chứ không xóa dữ liệu */}
+                <button type="button" onClick={deleteMember} style={{ background: '#dc3545', color: 'white', border: 'none', padding: '10px', borderRadius: '6px', fontWeight: 'bold', fontSize: '12px' }}>XÓA KHỎI Ô</button>
               </>
             )}
             <button type="button" onClick={() => setSelectedMember(null)} style={{ flex: !isAdmin ? 1 : 'none', background: '#333', color: 'white', border: 'none', padding: '10px', borderRadius: '6px', fontWeight: 'bold', minWidth: '80px' }}>ĐÓNG</button>
