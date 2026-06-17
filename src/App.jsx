@@ -34,8 +34,9 @@ function App() {
   
   const [skillLibrary, setSkillLibrary] = useState([]);
   const [customSkillUrl, setCustomSkillUrl] = useState('');
+  const [memberSkills, setMemberSkills] = useState([]);
 
-  // Trạng thái quản lý việc xếp nhanh thành viên vào ô trống
+  // Các trạng thái hỗ trợ chọn thành viên từ danh sách thay cho prompt
   const [assigningSlot, setAssigningSlot] = useState(null); // { type, slotNum }
   const [newCharName, setNewCharName] = useState('');
   const [newClassName, setNewClassName] = useState('Toái Mộng');
@@ -199,14 +200,14 @@ function App() {
       return;
     }
 
-    // Thay vì mở prompt, lưu lại vị trí ô trống đang kích hoạt để mở Giao diện chọn
+    // Khi click ô trống, kích hoạt giao diện modal chọn thay vì hiện prompt gõ chữ
     setAssigningSlot({ type, slotNum });
     setNewCharName('');
     setNewClassName('Toái Mộng');
     setSearchUnassigned('');
   };
 
-  // Hàm xếp một người có sẵn (chưa có vị trí slot) vào ô đang chọn
+  // Đưa một thành viên đã đăng ký (chưa có vị trí) vào ô trống vừa chọn
   const assignExistingMember = async (memberId) => {
     if (!assigningSlot) return;
     const { type, slotNum } = assigningSlot;
@@ -217,7 +218,7 @@ function App() {
     }
   };
 
-  // Hàm tạo mới hoàn toàn thành viên trực tiếp vào ô trống
+  // Tạo mới trực tiếp một thành viên ngay tại ô trống đó
   const handleCreateAndAssign = async (e) => {
     e.preventDefault();
     if (!newCharName.trim() || !assigningSlot) return;
@@ -235,7 +236,6 @@ function App() {
     }
   };
 
-  const [memberSkills, setMemberSkills] = useState([]);
   const addSkillToMember = async (url) => {
     if (!isAdmin || !selectedMember || !url) return;
 
@@ -331,7 +331,7 @@ function App() {
   const totalScoutsCount = members.filter(m => m.char_name && m.is_scout).length;
   const totalTowersCount = members.filter(m => m.char_name && m.is_tower_team).length;
 
-  // Lọc ra danh sách những thành viên chưa có vị trí (team_slot trống hoặc null) để hiển thị cho admin bấm chọn
+  // Lấy ra những thành viên đã có trong database nhưng chưa được xếp vào hàng ngũ (không có team_slot)
   const unassignedMembers = members.filter(m => !m.team_slot && m.char_name);
 
   const renderSlotCell = (type, slotNum) => {
@@ -394,9 +394,9 @@ function App() {
         .skill-lib-item:hover { border-color: gold; transform: scale(1.1); }
         .lib-remove-btn { position: absolute; top: -5px; right: -5px; background: black; color: red; border: 1px solid red; border-radius: 50%; width: 16px; height: 16px; font-size: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 5; }
         .custom-add-skill { display: flex; gap: 5px; margin-top: 10px; padding: 0 10px; }
-        .custom-input { flex: 1; background: #000; border: 1px solid #444; color: white; padding: 6px; border-radius: 4px; font-size: 11px; }
-        .upload-btn { background: #333; color: white; border: 1px solid #555; padding: 6px 10px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: bold; }
-        .add-btn { background: #d4af37; color: black; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: bold; }
+        .custom-input { flex: 1; background: #000; border: 1px solid #444; color: white; padding: 6px; border-radius: 4px; _font-size: 11px; }
+        .upload-btn { background: #333; color: white; border: 1px solid #555; padding: 6px 10px; border-radius: 4px; cursor: pointer; _font-size: 11px; font-weight: bold; }
+        .add-btn { background: #d4af37; color: black; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; _font-size: 11px; font-weight: bold; }
         
         .member-select-chip { padding: 6px 10px; border-radius: 4px; font-size: 11px; font-weight: bold; cursor: pointer; text-align: center; border: 1px solid rgba(255,255,255,0.1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: white; }
         .member-select-chip:hover { border-color: #fff; transform: scale(1.03); }
@@ -474,7 +474,6 @@ function App() {
         {[...Array(30)].map((_, i) => renderSlotCell('Học việc', i + 1))}
       </div>
 
-      {/* --- BẢN ĐỒ CHỈ HUY CHIẾN THUẬT RÚT GỌN --- */}
       <div className="map-section">
         <h3 style={{ color: 'gold', margin: '0 0 5px 0', fontSize: '18px' }}>CHỈ ĐẠO CHIẾN THUẬT</h3>
         
@@ -529,19 +528,19 @@ function App() {
         </div>
       </div>
 
-      {/* MODAL GIAO DIỆN CHỌN NHANH THÀNH VIÊN KHI CLICK Ô TRỐNG */}
+      {/* MODAL GIAO DIỆN CHỌN NHANH THÀNH VIÊN (THAY CHO PROMPT) */}
       {assigningSlot && isAdmin && (
         <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', background: '#141414', padding: '20px', borderRadius: '12px', border: '2px solid gold', zIndex: 1100, width: '90%', maxWidth: '500px', boxShadow: '0 0 40px rgba(0,0,0,0.9)', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}>
           <div style={{ fontSize: '15px', fontWeight: 'bold', color: 'gold', marginBottom: '12px' }}>
             XẾP THÀNH VIÊN VÀO Ô [S{assigningSlot.slotNum} - {assigningSlot.type}]
           </div>
 
-          {/* DANH SÁCH THÀNH VIÊN ĐÃ ĐĂNG KÝ CHƯA VÀO ĐỘI */}
+          {/* DANH SÁCH THÀNH VIÊN TRỐNG CHƯA VÀO ĐỘI */}
           <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden', minHeight: '180px', marginBottom: '15px', background: '#0a0a0a', padding: '10px', borderRadius: '8px', border: '1px solid #222' }}>
             <div style={{ fontSize: '11px', color: '#888', textAlign: 'left', marginBottom: '6px', fontWeight: 'bold' }}>
-              BẤM VÀO TÊN ĐỂ XẾP NHANH (TỪ DISCORD/DANH SÁCH CHỜ):
+              BẤM VÀO TÊN ĐỂ ĐƯA VÀO ĐỘI (DANH SÁCH CHỜ TỪ DISCORD):
             </div>
-            <input className="custom-input" style={{ marginBottom: '10px', flex: 'none' }} placeholder="Tìm nhanh tên thành viên..." value={searchUnassigned} onChange={(e) => setSearchUnassigned(e.target.value)} />
+            <input className="custom-input" style={{ marginBottom: '10px', flex: 'none', fontSize: '11px' }} placeholder="Tìm nhanh tên thành viên..." value={searchUnassigned} onChange={(e) => setSearchUnassigned(e.target.value)} />
             
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', overflowY: 'auto', flex: 1, padding: '2px' }}>
               {unassignedMembers
@@ -552,28 +551,28 @@ function App() {
                   </div>
                 ))}
               {unassignedMembers.filter(m => m.char_name.toLowerCase().includes(searchUnassigned.toLowerCase())).length === 0 && (
-                <div style={{ gridColumn: 'span 3', color: '#555', fontSize: '11px', padding: '20px 0' }}>Không tìm thấy thành viên phù hợp...</div>
+                <div style={{ gridColumn: 'span 3', color: '#555', fontSize: '11px', padding: '20px 0' }}>Không tìm thấy thành viên trống phù hợp...</div>
               )}
             </div>
           </div>
 
-          {/* FORM THÊM MỚI HOÀN TOÀN NẾU KHÔNG CÓ TRONG DANH SÁCH */}
+          {/* FORM THÊM MỚI TRỰC TIẾP TRÊN GIAO DIỆN NẾU CHƯA CÓ TRONG KHO */}
           <form onSubmit={handleCreateAndAssign} style={{ borderTop: '1px solid #222', paddingTop: '12px', textAlign: 'left' }}>
             <div style={{ fontSize: '11px', color: '#888', marginBottom: '6px', fontWeight: 'bold' }}>HOẶC TẠO MỚI HOÀN TOÀN TẠI Ô NÀY:</div>
             <div style={{ display: 'flex', gap: '6px' }}>
-              <input className="custom-input" required placeholder="Nhập tên nhân vật mới..." value={newCharName} onChange={(e) => setNewCharName(e.target.value)} />
-              <select className="custom-input" style={{ maxWidth: '120px', cursor: 'pointer' }} value={newClassName} onChange={(e) => setNewClassName(e.target.value)}>
+              <input className="custom-input" style={{ fontSize: '11px' }} required placeholder="Nhập tên nhân vật..." value={newCharName} onChange={(e) => setNewCharName(e.target.value)} />
+              <select className="custom-input" style={{ maxWidth: '120px', cursor: 'pointer', fontSize: '11px' }} value={newClassName} onChange={(e) => setNewClassName(e.target.value)}>
                 {Object.keys(classInfo).map(cls => <option key={cls} value={cls}>{cls}</option>)}
               </select>
-              <button type="submit" className="add-btn" style={{ height: '31px' }}>THÊM</button>
+              <button type="submit" className="add-btn" style={{ height: '31px', fontSize: '11px' }}>THÊM</button>
             </div>
           </form>
 
-          <button onClick={() => setAssigningSlot(null)} style={{ background: '#333', color: 'white', border: 'none', padding: '8px', borderRadius: '6px', fontWeight: 'bold', marginTop: '15px', width: '100%', cursor: 'pointer' }}>ĐÓNG</button>
+          <button type="button" onClick={() => setAssigningSlot(null)} style={{ background: '#333', color: 'white', border: 'none', padding: '8px', borderRadius: '6px', fontWeight: 'bold', marginTop: '15px', width: '100%', cursor: 'pointer' }}>ĐÓNG</button>
         </div>
       )}
 
-      {/* MODAL ĐIỀU CHỈNH CHỨC NĂNG - CHỈ HIỂN THỊ KHI ĐANG Ở QUYỀN ADMIN */}
+      {/* MODAL ĐIỀU CHỈNH CHỨC NĂNG THÀNH VIÊN */}
       {selectedMember && isAdmin && (
         <div style={{ position: 'fixed', bottom: '20px', left: '50%', transform: 'translateX(-50%)', background: '#1a1a1a', padding: '20px', borderRadius: '15px', border: '2px solid gold', zIndex: 1000, width: '90%', maxWidth: '420px', boxShadow: '0 0 30px rgba(0,0,0,1)' }}>
           <div style={{ marginBottom: '5px', fontWeight: 'bold', color: classInfo[selectedMember.class_name]?.color, fontSize: '18px' }}>{selectedMember.char_name}</div>
@@ -594,9 +593,9 @@ function App() {
             <div style={{ marginTop: '10px', borderTop: '1px solid #333', paddingTop: '10px' }}>
               <div style={{ fontSize: '9px', color: '#888', marginBottom: '5px' }}>THÊM SKILL MỚI VÀO KHO</div>
               <div className="custom-add-skill">
-                <input className="custom-input" placeholder="Link ảnh skill..." value={customSkillUrl} onChange={(e) => setCustomSkillUrl(e.target.value)} />
-                <button className="add-btn" onClick={() => addToLibrary(customSkillUrl)}>THÊM</button>
-                <label className="upload-btn">
+                <input className="custom-input" style={{ fontSize: '11px' }} placeholder="Link ảnh skill..." value={customSkillUrl} onChange={(e) => setCustomSkillUrl(e.target.value)} />
+                <button type="button" className="add-btn" style={{ fontSize: '11px' }} onClick={() => addToLibrary(customSkillUrl)}>THÊM</button>
+                <label className="upload-btn" style={{ fontSize: '11px' }}>
                   TẢI ẢNH
                   <input type="file" accept="image/*" hidden onChange={handleFileChange} />
                 </label>
@@ -604,7 +603,7 @@ function App() {
             </div>
           </div>
 
-          <div style={{ display: 'flex', justify-content: 'center', gap: '8px', marginBottom: '20px', background: 'rgba(0,0,0,0.4)', padding: '10px', borderRadius: '8px' }}>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginBottom: '20px', background: 'rgba(0,0,0,0.4)', padding: '10px', borderRadius: '8px' }}>
             {[0, 1, 2, 3, 4].map(i => {
               const skill = memberSkills.find(s => s.member_id === selectedMember.id && parseInt(s.pos_x) === i);
               return (
@@ -612,7 +611,7 @@ function App() {
                   {skill ? (
                     <>
                       <img src={skill.skill_url} style={{ width: '100%', height: '100%', borderRadius: '6px' }} alt="equipped" />
-                      <div onClick={() => removeSkillFromMember(skill.id)} style={{ position: 'absolute', top: '-5px', right: '-5px', background: 'red', color: 'white', width: '18px', height: '18px', borderRadius: '50%', fontSize: '11px', cursor: 'pointer', display: 'flex', alignItems: 'center', justify-content: 'center', fontWeight: 'bold', border: '1px solid white' }}>×</div>
+                      <div onClick={() => removeSkillFromMember(skill.id)} style={{ position: 'absolute', top: '-5px', right: '-5px', background: 'red', color: 'white', width: '18px', height: '18px', borderRadius: '50%', fontSize: '11px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyCenter: 'center', fontWeight: 'bold', border: '1px solid white' }}>×</div>
                     </>
                   ) : 'Trống'}
                 </div>
@@ -621,20 +620,20 @@ function App() {
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', marginBottom: '10px' }}>
-            <button onClick={toggleScout} style={{ background: selectedMember.is_scout ? '#00ffff' : '#333', color: selectedMember.is_scout ? '#000' : '#fff', border: 'none', padding: '8px', borderRadius: '6px', fontWeight: 'bold', fontSize: '11px' }}>
+            <button type="button" onClick={toggleScout} style={{ background: selectedMember.is_scout ? '#00ffff' : '#333', color: selectedMember.is_scout ? '#000' : '#fff', border: 'none', padding: '8px', borderRadius: '6px', fontWeight: 'bold', fontSize: '11px' }}>
               {selectedMember.is_scout ? "BỎ SCOUT 🔎" : "SCOUT 🔎"}
             </button>
-            <button onClick={toggleTowerTeam} style={{ background: selectedMember.is_tower_team ? '#ff4500' : '#fff', color: selectedMember.is_tower_team ? '#fff' : '#000', border: 'none', padding: '8px', borderRadius: '6px', fontWeight: 'bold', fontSize: '11px' }}>
+            <button type="button" onClick={toggleTowerTeam} style={{ background: selectedMember.is_tower_team ? '#ff4500' : '#fff', color: selectedMember.is_tower_team ? '#fff' : '#000', border: 'none', padding: '8px', borderRadius: '6px', fontWeight: 'bold', fontSize: '11px' }}>
               {selectedMember.is_tower_team ? "BỎ TEAM TRỤ 🔨" : "TEAM TRỤ 🔨"}
             </button>
           </div>
 
           <div style={{ display: 'flex', gap: '10px' }}>
-            <button onClick={toggleItem} style={{ flex: 1, background: selectedMember.has_item ? '#444' : '#28a745', color: 'white', border: 'none', padding: '10px', borderRadius: '6px', fontWeight: 'bold' }}>
+            <button type="button" onClick={toggleItem} style={{ flex: 1, background: selectedMember.has_item ? '#444' : '#28a745', color: 'white', border: 'none', padding: '10px', borderRadius: '6px', fontWeight: 'bold' }}>
                 {selectedMember.has_item ? "BỎ VẬT TƯ" : "VẬT TƯ 📦"}
             </button>
-            <button onClick={deleteMember} style={{ background: '#dc3545', color: 'white', border: 'none', padding: '10px', borderRadius: '6px', fontWeight: 'bold' }}>XÓA HẲN</button>
-            <button onClick={() => setSelectedMember(null)} style={{ background: '#333', color: 'white', border: 'none', padding: '10px', borderRadius: '6px', fontWeight: 'bold', minWidth: '80px' }}>ĐÓNG</button>
+            <button type="button" onClick={deleteMember} style={{ background: '#dc3545', color: 'white', border: 'none', padding: '10px', borderRadius: '6px', fontWeight: 'bold' }}>XÓA HẲN</button>
+            <button type="button" onClick={() => setSelectedMember(null)} style={{ background: '#333', color: 'white', border: 'none', padding: '10px', borderRadius: '6px', fontWeight: 'bold', minWidth: '80px' }}>ĐÓNG</button>
           </div>
         </div>
       )}
