@@ -43,9 +43,12 @@ function App() {
   const [newClassName, setNewClassName] = useState('Toái Mộng');
   const [searchUnassigned, setSearchUnassigned] = useState('');
   
+  // Trạng thái gán phái trung gian khi Admin chọn 1 người chưa có phái từ list chờ
+  const [pendingAssignMember, setPendingAssignMember] = useState(null); // Lưu thông tin member đang chờ chọn phái
+  const [selectedClassForAssign, setSelectedClassForAssign] = useState('Toái Mộng');
+
   // Trạng thái cho khu vực nhập danh sách thô bằng text hàng loạt
   const [bulkText, setBulkText] = useState('');
-  const [bulkClass, setBulkClass] = useState('Toái Mộng');
 
   const mapRef = useRef(null);
 
@@ -120,7 +123,7 @@ function App() {
     if (error) fetchData();
   };
 
-  const officialCount = members.filter(m => m.char_name && m.type === 'Chính thức').length;
+  const officialCount = members.filter(m => m.char_name && m.type === 'Chính thức' && m.team_slot).length;
 
   const handleAdminLogin = () => {
     const pass = prompt("Nhập mật mã Admin:");
@@ -134,11 +137,12 @@ function App() {
 
   const handleResetBoard = async () => {
     if (!isAdmin) return;
-    if (window.confirm("Xóa sạch sơ đồ và vị trí tuần này? (Danh sách thành viên chờ vẫn sẽ được giữ lại)")) {
+    if (window.confirm("Xóa sạch sơ đồ và vị trí tuần này? (Danh sách thành viên chờ vẫn sẽ được giữ lại và reset trạng thái hệ phái)")) {
       await supabase.from('member_skills').delete().neq('id', 0);
       await supabase.from('team_positions').delete().neq('id', 0);
       const { error } = await supabase.from('register_list').update({
         team_slot: null,
+        class_name: '', // Đưa về trạng thái chưa chọn hệ phái khi kick ra ngoài danh sách chờ
         has_item: false,
         is_scout: false,
         is_tower_team: false
@@ -211,17 +215,32 @@ function App() {
     }
 
     setAssigningSlot({ type, slotNum });
+    setPendingAssignMember(null);
     setNewCharName('');
     setNewClassName('Toái Mộng');
     setSearchUnassigned('');
     setBulkText('');
   };
 
-  const assignExistingMember = async (memberId) => {
-    if (!assigningSlot) return;
+  // Bước 1: Khi admin click chọn thành viên từ list chờ
+  const startAssignMember = (member) => {
+    setPendingAssignMember(member);
+    setSelectedClassForAssign('Toái Mộng'); // Default phái để chọn
+  };
+
+  // Bước 2: Xác nhận chọn phái và đưa vào ô sơ đồ chính thức
+  const confirmAssignWithClass = async () => {
+    if (!assigningSlot || !pendingAssignMember) return;
     const { type, slotNum } = assigningSlot;
-    const { error } = await supabase.from('register_list').update({ type, team_slot: slotNum }).eq('id', memberId);
+    
+    const { error } = await supabase.from('register_list').update({ 
+      type, 
+      team_slot: slotNum,
+      class_name: selectedClassForAssign // Gán hệ phái do admin chọn tại thời điểm này
+    }).eq('id', pendingAssignMember.id);
+
     if (!error) {
+      setPendingAssignMember(null);
       setAssigningSlot(null);
       fetchData();
     }
@@ -244,9 +263,11 @@ function App() {
     }
   };
 
+  // THÊM HÀNG LOẠT: CHỈ LẤY TÊN, KHÔNG CÓ HỆ PHÁI
   const handleBulkInsert = async () => {
     if (!bulkText.trim()) return;
     
+    // Tách các tên theo dấu phẩy hoặc xuống dòng
     const names = bulkText
       .split(/[\n,]+/)
       .map(name => name.trim())
@@ -259,19 +280,19 @@ function App() {
       .filter(name => !existingNames.includes(name.toLowerCase()))
       .map(name => ({
         char_name: name,
-        class_name: bulkClass,
+        class_name: '', // Hoàn toàn rỗng, chưa gán hệ phái
         team_slot: null,
         type: 'Chính thức'
       }));
 
     if (newObjects.length === 0) {
-      alert("Tất cả các tên bạn nhập đều đã tồn tại trong danh sách!");
+      alert("Tất cả các tên bạn nhập đều đã tồn tại trong hệ thống!");
       return;
     }
 
     const { error } = await supabase.from('register_list').insert(newObjects);
     if (!error) {
-      alert(`Đã thêm thành công ${newObjects.length} thành viên vào danh sách chờ!`);
+      alert(`Đã thêm thành công ${newObjects.length} thành viên vào danh sách chờ (Chưa có hệ phái)!`);
       setBulkText('');
       fetchData();
     } else {
@@ -357,7 +378,7 @@ function App() {
   };
 
   const handleQuickDeleteWaiting = async (e, memberId, name) => {
-    e.stopPropagation(); // Ngăn sự kiện click kích hoạt modal hoặc các hành động khác
+    e.stopPropagation(); 
     if (!isAdmin) return;
     if (window.confirm(`Xác nhận xóa hẳn [${name}] khỏi danh sách chờ đăng ký?`)) {
       await supabase.from('member_skills').delete().eq('member_id', memberId);
@@ -395,7 +416,7 @@ function App() {
       <div key={`${type}-${slotNum}`} onClick={() => handleSlotClick(type, slotNum)}
         style={{
           height: '42px', margin: '3px 0', borderRadius: '4px', position: 'relative',
-          backgroundColor: occupant ? classInfo[occupant.class_name]?.color : '#111',
+          backgroundColor: occupant ? (classInfo[occupant.class_name]?.color || '#444') : '#111',
           border: isBeingMoved ? '2px solid white' : (assigningSlot && assigningSlot.type === type && assigningSlot.slotNum === slotNum) ? '2px solid gold' : '1px solid #333',
           display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: isAdmin ? 'pointer' : 'default',
           fontSize: '10px', color: occupant?.class_name === 'Long Ngâm' ? '#000' : 'white', fontWeight: 'bold',
@@ -453,10 +474,9 @@ function App() {
         .member-select-chip { padding: 6px 10px; border-radius: 4px; font-size: 11px; font-weight: bold; cursor: pointer; text-align: center; border: 1px solid rgba(255,255,255,0.1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: white; }
         .member-select-chip:hover { border-color: #fff; transform: scale(1.03); }
 
-        /* CSS CHO PHẦN DANH SÁCH CHỜ HIỂN THỊ CHI TIẾT */
         .waiting-box { max-width: 1200px; margin: 30px auto 10px auto; background: #0a0a0a; border: 1px solid #222; border-radius: 8px; padding: 15px; text-align: left; }
         .waiting-flex-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 6px; margin-top: 10px; }
-        .waiting-item-chip { display: flex; align-items: center; justify-content: space-between; height: 26px; padding: 0 6px 0 10px; border-radius: 4px; font-size: 11px; font-weight: bold; overflow: hidden; border: 1px solid rgba(0,0,0,0.15); }
+        .waiting-item-chip { display: flex; align-items: center; justify-content: space-between; height: 26px; padding: 0 6px 0 10px; border-radius: 4px; font-size: 11px; font-weight: bold; overflow: hidden; border: 1px solid rgba(255,255,255,0.1); }
         .waiting-text-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; margin-right: 4px; }
         .waiting-delete-icon-btn { background: rgba(0, 0, 0, 0.3); color: #ff4d4d; border: none; border-radius: 3px; width: 16px; height: 16px; font-size: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-weight: bold; flex-shrink: 0; transition: all 0.2s; }
         .waiting-delete-icon-btn:hover { background: #ff4d4d; color: white; }
@@ -534,33 +554,37 @@ function App() {
         {[...Array(30)].map((_, i) => renderSlotCell('Học việc', i + 1))}
       </div>
 
-      {/* BLOCK HIỂN THỊ DANH SÁCH CHỜ: NHỎ, DÀI, BAO QUÁT PHÍA TRÊN MAP, CÓ NÚT XÓA CHO ADMIN */}
+      {/* DANH SÁCH CHỜ: Khi chưa xếp phái sẽ hiển thị màu nền mặc định xám đen tĩnh */}
       <div className="waiting-box">
         <h2 style={{ color: 'gold', fontSize: '13px', margin: '0 0 5px 0', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span>📋 THÀNH VIÊN CHỜ XẾP ĐỘI CHI TIẾT ({unassignedMembers.length})</span>
-          <span style={{ fontSize: '11px', color: '#666', fontWeight: 'normal' }}>(Những người chưa được đưa vào các ô S trên sơ đồ)</span>
+          <span style={{ fontSize: '11px', color: '#666', fontWeight: 'normal' }}>(Hàng loạt dán vào không cần hệ phái)</span>
         </h2>
         <div className="waiting-flex-grid">
-          {unassignedMembers.map(m => (
-            <div key={m.id} className="waiting-item-chip" style={{ 
-              backgroundColor: classInfo[m.class_name]?.color || '#222', 
-              color: m.class_name === 'Long Ngâm' ? '#000' : 'white' 
-            }}>
-              <span className="waiting-text-name" title={`${m.char_name} (${m.class_name})`}>
-                {m.char_name}
-              </span>
-              {isAdmin && (
-                <button 
-                  type="button"
-                  className="waiting-delete-icon-btn" 
-                  title="Xóa khỏi danh sách chờ"
-                  onClick={(e) => handleQuickDeleteWaiting(e, m.id, m.char_name)}
-                >
-                  ×
-                </button>
-              )}
-            </div>
-          ))}
+          {unassignedMembers.map(m => {
+            const hasClass = m.class_name && classInfo[m.class_name];
+            return (
+              <div key={m.id} className="waiting-item-chip" style={{ 
+                backgroundColor: hasClass ? classInfo[m.class_name].color : '#222', 
+                color: m.class_name === 'Long Ngâm' ? '#000' : 'white',
+                border: hasClass ? 'none' : '1px dashed #555'
+              }}>
+                <span className="waiting-text-name" title={`${m.char_name} ${m.class_name ? `(${m.class_name})` : '(Chưa chọn phái)'}`}>
+                  {m.char_name} {!m.class_name && '❓'}
+                </span>
+                {isAdmin && (
+                  <button 
+                    type="button"
+                    className="waiting-delete-icon-btn" 
+                    title="Xóa hẳn khỏi kho chờ"
+                    onClick={(e) => handleQuickDeleteWaiting(e, m.id, m.char_name)}
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+            );
+          })}
           {unassignedMembers.length === 0 && (
             <div style={{ color: '#555', fontSize: '11px', gridColumn: '1 / -1', padding: '5px 0' }}>
               Hiện không có ai trong danh sách chờ xếp đội.
@@ -630,68 +654,91 @@ function App() {
             XẾP THÀNH VIÊN VÀO Ô [S{assigningSlot.slotNum} - {assigningSlot.type}]
           </div>
 
-          {/* KHO THÀNH VIÊN CHỜ & THANH TÌM KIẾM NHANH */}
-          <div style={{ display: 'flex', flexDirection: 'column', height: '180px', marginBottom: '12px', background: '#0a0a0a', padding: '10px', borderRadius: '8px', border: '1px solid #222', overflow: 'hidden' }}>
-            <div style={{ fontSize: '11px', color: '#888', textAlign: 'left', marginBottom: '6px', fontWeight: 'bold' }}>
-              BẤM VÀO TÊN ĐỂ ĐƯA VÀO ĐỘI (DANH SÁCH CHỜ):
+          {/* KHO THÀNH VIÊN CHỜ */}
+          {!pendingAssignMember ? (
+            <div style={{ display: 'flex', flexDirection: 'column', height: '220px', marginBottom: '12px', background: '#0a0a0a', padding: '10px', borderRadius: '8px', border: '1px solid #222', overflow: 'hidden' }}>
+              <div style={{ fontSize: '11px', color: '#888', textAlign: 'left', marginBottom: '6px', fontWeight: 'bold' }}>
+                BẤM VÀO TÊN ĐỂ CHỌN NGƯỜI ĐƯA VÀO Ô SƠ ĐỒ:
+              </div>
+              <input className="custom-input" style={{ marginBottom: '8px', flex: 'none', fontSize: '11px' }} placeholder="Tìm nhanh tên thành viên chờ..." value={searchUnassigned} onChange={(e) => setSearchUnassigned(e.target.value)} />
+              
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', overflowY: 'auto', flex: 1, padding: '2px' }}>
+                {unassignedMembers
+                  .filter(m => m.char_name.toLowerCase().includes(searchUnassigned.toLowerCase()))
+                  .map(m => (
+                    <div key={m.id} className="member-select-chip" style={{ backgroundColor: classInfo[m.class_name]?.color || '#333', color: m.class_name === 'Long Ngâm' ? '#000' : '#fff' }} onClick={() => startAssignMember(m)}>
+                      {m.char_name} {!m.class_name && '❓'}
+                    </div>
+                  ))}
+                {unassignedMembers.filter(m => m.char_name.toLowerCase().includes(searchUnassigned.toLowerCase())).length === 0 && (
+                  <div style={{ gridColumn: 'span 3', color: '#555', fontSize: '11px', padding: '15px 0' }}>Không tìm thấy thành viên trống...</div>
+                )}
+              </div>
             </div>
-            <input className="custom-input" style={{ marginBottom: '8px', flex: 'none', fontSize: '11px' }} placeholder="Tìm nhanh tên thành viên..." value={searchUnassigned} onChange={(e) => setSearchUnassigned(e.target.value)} />
-            
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', overflowY: 'auto', flex: 1, padding: '2px' }}>
-              {unassignedMembers
-                .filter(m => m.char_name.toLowerCase().includes(searchUnassigned.toLowerCase()))
-                .map(m => (
-                  <div key={m.id} className="member-select-chip" style={{ backgroundColor: classInfo[m.class_name]?.color, color: m.class_name === 'Long Ngâm' ? '#000' : '#fff' }} onClick={() => assignExistingMember(m.id)}>
-                    {m.char_name}
-                  </div>
-                ))}
-              {unassignedMembers.filter(m => m.char_name.toLowerCase().includes(searchUnassigned.toLowerCase())).length === 0 && (
-                <div style={{ gridColumn: 'span 3', color: '#555', fontSize: '11px', padding: '15px 0' }}>Không tìm thấy thành viên trống...</div>
-              )}
+          ) : (
+            /* ĐÂY CHÍNH LÀ CHỖ ADMIN CHỌN PHÁI CHO TỪNG NGƯỜI KHI ĐƯA VÀO BẢNG ĐĂNG KÝ */
+            <div style={{ background: '#1a1a1a', padding: '15px', borderRadius: '8px', border: '1px solid gold', marginBottom: '12px', textAlign: 'left' }}>
+              <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#fff', marginBottom: '10px' }}>
+                GÁN HỆ PHÁI CHO: <span style={{ color: 'gold', fontSize: '15px' }}>{pendingAssignMember.char_name}</span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div>
+                  <label style={{ fontSize: '11px', color: '#aaa', display: 'block', marginBottom: '4px' }}>Chọn hệ phái chính thức:</label>
+                  <select className="custom-input" style={{ fontSize: '12px', padding: '6px', width: '100%' }} value={selectedClassForAssign} onChange={(e) => setSelectedClassForAssign(e.target.value)}>
+                    {Object.keys(classInfo).map(cls => <option key={cls} value={cls}>{cls}</option>)}
+                  </select>
+                </div>
+                <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+                  <button type="button" onClick={confirmAssignWithClass} style={{ flex: 1, background: '#28a745', color: '#fff', border: 'none', padding: '8px', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>
+                    XÁC NHẬN VÀO SƠ ĐỒ
+                  </button>
+                  <button type="button" onClick={() => setPendingAssignMember(null)} style={{ background: '#555', color: '#fff', border: 'none', padding: '8px', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>
+                    QUAY LẠI
+                  </button>
+                </div>
+              </div>
             </div>
-          </div>
+          )}
 
-          {/* KHU VỰC THÊM TEXT HÀNG LOẠT ĐỂ UPDATE VÀO KHO DỰ TRỮ (KHÔNG BỊ MẤT KHI RESET) */}
-          <div style={{ borderTop: '1px solid #222', paddingTop: '10px', marginBottom: '12px', textAlign: 'left' }}>
-            <div style={{ fontSize: '11px', color: 'gold', marginBottom: '5px', fontWeight: 'bold' }}>PASTE DANH SÁCH TEXT HÀNG LOẠT VÀO KHO CHỜ:</div>
-            <textarea 
-              style={{ width: '100%', height: '55px', background: '#000', border: '1px solid #444', borderRadius: '4px', color: '#fff', padding: '5px', fontSize: '11px', resize: 'none', fontFamily: 'monospace' }}
-              placeholder="Dán danh sách tên từ Excel/Word vào đây... (Ngăn cách bằng dấu phẩy hoặc Xuống dòng)"
-              value={bulkText}
-              onChange={(e) => setBulkText(e.target.value)}
-            />
-            <div style={{ display: 'flex', gap: '6px', marginTop: '5px', alignItems: 'center' }}>
-              <span style={{ fontSize: '10px', color: '#aaa' }}>Gán phái tạm thời:</span>
-              <select className="custom-input" style={{ maxWidth: '110px', padding: '3px', fontSize: '11px', height: '26px' }} value={bulkClass} onChange={(e) => setBulkClass(e.target.value)}>
-                {Object.keys(classInfo).map(cls => <option key={cls} value={cls}>{cls}</option>)}
-              </select>
-              <button type="button" onClick={handleBulkInsert} style={{ background: '#28a745', color: '#fff', border: 'none', borderRadius: '4px', padding: '4px 12px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', height: '26px', marginLeft: 'auto' }}>
-                NẠP VÀO KHO CHỜ
+          {/* KHU VỰC THÊM TEXT HÀNG LOẠT: LÚC NÀY CHỈ NHẬP TÊN, HOÀN TOÀN KHÔNG CÓ PHÁI */}
+          {!pendingAssignMember && (
+            <div style={{ borderTop: '1px solid #222', paddingTop: '10px', marginBottom: '12px', textAlign: 'left' }}>
+              <div style={{ fontSize: '11px', color: 'gold', marginBottom: '5px', fontWeight: 'bold' }}>PASTE DANH SÁCH TÊN HÀNG LOẠT VÀO KHO CHỜ:</div>
+              <textarea 
+                style={{ width: '100%', height: '65px', background: '#000', border: '1px solid #444', borderRadius: '4px', color: '#fff', padding: '5px', fontSize: '11px', resize: 'none', fontFamily: 'monospace' }}
+                placeholder="Dán danh sách chỉ chứa Tên vào đây... (Ngăn cách bằng dấu phẩy hoặc Xuống dòng)"
+                value={bulkText}
+                onChange={(e) => setBulkText(e.target.value)}
+              />
+              <button type="button" onClick={handleBulkInsert} style={{ background: '#d4af37', color: '#000', border: 'none', borderRadius: '4px', padding: '6px 12px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', marginTop: '5px', width: '100%' }}>
+                NẠP HÀNG LOẠT VÀO KHO CHỜ (CHƯA PHÂN PHÁI)
               </button>
             </div>
-          </div>
+          )}
 
           {/* FORM TẠO ĐƠN LẺ */}
-          <form onSubmit={handleCreateAndAssign} style={{ borderTop: '1px solid #222', paddingTop: '10px', textAlign: 'left' }}>
-            <div style={{ fontSize: '11px', color: '#888', marginBottom: '5px', fontWeight: 'bold' }}>HOẶC TẠO MỚI 1 NGƯỜI TRỰC TIẾP VÀO Ô:</div>
-            <div style={{ display: 'flex', gap: '6px' }}>
-              <input className="custom-input" style={{ fontSize: '11px', padding: '5px' }} required placeholder="Nhập tên..." value={newCharName} onChange={(e) => setNewCharName(e.target.value)} />
-              <select className="custom-input" style={{ maxWidth: '110px', cursor: 'pointer', fontSize: '11px' }} value={newClassName} onChange={(e) => setNewClassName(e.target.value)}>
-                {Object.keys(classInfo).map(cls => <option key={cls} value={cls}>{cls}</option>)}
-              </select>
-              <button type="submit" className="add-btn" style={{ fontSize: '11px', padding: '5px 12px' }}>THÊM MỚI</button>
-            </div>
-          </form>
+          {!pendingAssignMember && (
+            <form onSubmit={handleCreateAndAssign} style={{ borderTop: '1px solid #222', paddingTop: '10px', textAlign: 'left' }}>
+              <div style={{ fontSize: '11px', color: '#888', marginBottom: '5px', fontWeight: 'bold' }}>HOẶC TẠO MỚI 1 NGƯỜI TRỰC TIẾP VÀO Ô:</div>
+              <div style={{ display: 'flex', gap: '6px' }}>
+                <input className="custom-input" style={{ fontSize: '11px', padding: '5px' }} required placeholder="Nhập tên..." value={newCharName} onChange={(e) => setNewCharName(e.target.value)} />
+                <select className="custom-input" style={{ maxWidth: '110px', cursor: 'pointer', fontSize: '11px' }} value={newClassName} onChange={(e) => setNewClassName(e.target.value)}>
+                  {Object.keys(classInfo).map(cls => <option key={cls} value={cls}>{cls}</option>)}
+                </select>
+                <button type="submit" className="add-btn" style={{ fontSize: '11px', padding: '5px 12px' }}>THÊM MỚI</button>
+              </div>
+            </form>
+          )}
 
-          <button type="button" onClick={() => setAssigningSlot(null)} style={{ background: '#333', color: 'white', border: 'none', padding: '8px', borderRadius: '6px', fontWeight: 'bold', marginTop: '12px', width: '100%', cursor: 'pointer', fontSize: '12px' }}>ĐÓNG GIAO DIỆN</button>
+          <button type="button" onClick={() => { setAssigningSlot(null); setPendingAssignMember(null); }} style={{ background: '#333', color: 'white', border: 'none', padding: '8px', borderRadius: '6px', fontWeight: 'bold', marginTop: '12px', width: '100%', cursor: 'pointer', fontSize: '12px' }}>ĐÓNG GIAO DIỆN</button>
         </div>
       )}
 
       {/* MODAL ĐIỀU CHỈNH CHỨC NĂNG THÀNH VIÊN */}
       {selectedMember && isAdmin && (
         <div style={{ position: 'fixed', bottom: '20px', left: '50%', transform: 'translateX(-50%)', background: '#1a1a1a', padding: '20px', borderRadius: '15px', border: '2px solid gold', zIndex: 1000, width: '90%', maxWidth: '420px', boxShadow: '0 0 30px rgba(0,0,0,1)' }}>
-          <div style={{ marginBottom: '5px', fontWeight: 'bold', color: classInfo[selectedMember.class_name]?.color, fontSize: '18px' }}>{selectedMember.char_name}</div>
-          <div style={{ fontSize: '11px', color: '#888', marginBottom: '15px' }}>Hệ: {selectedMember.class_name} | {selectedMember.type}</div>
+          <div style={{ marginBottom: '5px', fontWeight: 'bold', color: classInfo[selectedMember.class_name]?.color || '#fff', fontSize: '18px' }}>{selectedMember.char_name}</div>
+          <div style={{ fontSize: '11px', color: '#888', marginBottom: '15px' }}>Hệ: {selectedMember.class_name || 'Chưa chọn'} | {selectedMember.type}</div>
 
           <div style={{ marginBottom: '15px', background: '#222', padding: '10px', borderRadius: '8px' }}>
             <div style={{ fontSize: '10px', color: 'gold', marginBottom: '8px' }}>KHO SKILL CHUNG</div>
@@ -726,7 +773,7 @@ function App() {
                   {skill ? (
                     <>
                       <img src={skill.skill_url} style={{ width: '100%', height: '100%', borderRadius: '6px' }} alt="equipped" />
-                      <div onClick={() => removeSkillFromMember(skill.id)} style={{ position: 'absolute', top: '-5px', right: '-5px', background: 'red', color: 'white', width: '18px', height: '18px', borderRadius: '50%', fontSize: '11px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifycontent: 'center', fontWeight: 'bold', border: '1px solid white' }}>×</div>
+                      <div onClick={() => removeSkillFromMember(skill.id)} style={{ position: 'absolute', top: '-5px', right: '-5px', background: 'red', color: 'white', width: '18px', height: '18px', borderRadius: '50%', fontSize: '11px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', border: '1px solid white' }}>×</div>
                     </>
                   ) : 'Trống'}
                 </div>
