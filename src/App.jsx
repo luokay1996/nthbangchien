@@ -26,18 +26,20 @@ const groupSettings = {
 function App() {
   const [members, setMembers] = useState([]);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [isLimitEnabled, setIsLimitEnabled] = useState(true);
   const [movingMember, setMovingMember] = useState(null);
 
   const [selectedMember, setSelectedMember] = useState(null);
-  const [form, setForm] = useState({ char_name: '', class_name: 'Toái Mộng', team_slot: null, type: 'Chính thức' });
   const [teamGroups, setTeamGroups] = useState({});
-  const [teamPositions, setTeamPositions] = useState([]); // Quản lý danh sách các node tự do trên bản đồ
+  const [teamPositions, setTeamPositions] = useState([]); 
   
-  // --- STATE CHO KHO SKILL ĐỘNG ---
   const [skillLibrary, setSkillLibrary] = useState([]);
   const [customSkillUrl, setCustomSkillUrl] = useState('');
-  const [memberSkills, setMemberSkills] = useState([]);
+
+  // Trạng thái quản lý việc xếp nhanh thành viên vào ô trống
+  const [assigningSlot, setAssigningSlot] = useState(null); // { type, slotNum }
+  const [newCharName, setNewCharName] = useState('');
+  const [newClassName, setNewClassName] = useState('Toái Mộng');
+  const [searchUnassigned, setSearchUnassigned] = useState('');
 
   const mapRef = useRef(null);
 
@@ -46,13 +48,12 @@ function App() {
     const { data: groups } = await supabase.from('team_groups').select('*');
     const { data: positions } = await supabase.from('team_positions').select('*');
     const { data: skills } = await supabase.from('member_skills').select('*');
-    const { data: lib } = await supabase.from('skill_library').select('*'); // Lấy kho skill từ DB
+    const { data: lib } = await supabase.from('skill_library').select('*'); 
 
     if (mems) setMembers(mems);
     if (skills) setMemberSkills(skills); 
     if (lib) setSkillLibrary(lib);
     if (groups) {
-      // Đổi tên Nhóm thành Đoàn khi đọc từ database lên để tương thích dữ liệu cũ nếu có
       const groupMap = Object.fromEntries(groups.map(g => {
         let name = g.group_name || 'Đoàn 1';
         if (name.startsWith('Nhóm')) {
@@ -94,14 +95,12 @@ function App() {
     updateTeamPosition(id, safeX, safeY);
   };
 
-  // Hàm thêm mới 1 mục tiêu/vị trí icon lên bản đồ (Thoải mái số lượng)
   const addNewMarker = async (type) => {
     if (!isAdmin) return;
     await supabase.from('team_positions').insert([{ marker_type: type, pos_x: 50, pos_y: 50 }]);
     fetchData();
   };
 
-  // Hàm xóa icon khỏi bản đồ
   const removeMarker = async (id) => {
     if (!isAdmin) return;
     await supabase.from('team_positions').delete().eq('id', id);
@@ -121,7 +120,7 @@ function App() {
     const pass = prompt("Nhập mật mã Admin:");
     if (pass === "tp2026-dd") { 
       setIsAdmin(true); 
-      alert("ĐÃ KÍCH HOẠT QUYỀN ADMIN!"); 
+      alert("ĐÃ KÍCH HOẠT QUYỀN ADMIN! BẠN CÓ THỂ CHỈNH SỬA TOÀN BỘ WEB."); 
     } else { 
       alert("Sai mật mã!"); 
     }
@@ -146,7 +145,6 @@ function App() {
     }
   };
 
-  // Thêm chức năng bật tắt Scout cho thành viên (Chuyển thành chỉ Admin)
   const toggleScout = async () => {
     if (!isAdmin || !selectedMember) return;
     const { error } = await supabase.from('register_list').update({ is_scout: !selectedMember.is_scout }).eq('id', selectedMember.id);
@@ -156,7 +154,6 @@ function App() {
     }
   };
 
-  // Thêm chức năng bật tắt Team Trụ cho thành viên (Chuyển thành chỉ Admin)
   const toggleTowerTeam = async () => {
     if (!isAdmin || !selectedMember) return;
     const { error } = await supabase.from('register_list').update({ is_tower_team: !selectedMember.is_tower_team }).eq('id', selectedMember.id);
@@ -167,19 +164,10 @@ function App() {
   };
 
   const handleSlotClick = async (type, slotNum) => {
-    const occupant = members.find(m => m.type === type && m.team_slot === slotNum);
-    
-    // THÀNH VIÊN VÀ ADMIN: Nếu ô đã có người, cho phép bấm vào để kích hoạt Modal xem danh sách Skill mang theo
-    if (occupant) {
-      setSelectedMember(occupant);
-      if (isAdmin) setMovingMember(occupant);
-      return;
-    }
-
-    // THÀNH VIÊN: Nếu bấm vào ô trống thì chặn hoàn toàn (Vì chức năng đăng ký đã chuyển qua Discord)
     if (!isAdmin) return;
 
-    // ADMIN CONTROL: Logic kéo thả / đổi vị trí và điền thành viên mới trực tiếp vào ô trống
+    const occupant = members.find(m => m.type === type && m.team_slot === slotNum);
+    
     if (movingMember) {
       if (movingMember.type === type && movingMember.team_slot === slotNum) {
         setMovingMember(null);
@@ -199,30 +187,55 @@ function App() {
         setMembers(prev => prev.map(m => 
           m.id === movingMember.id ? { ...m, type, team_slot: slotNum } : m
         ));
-        await supabase.from('register_list').update({ type, team_slot: slotNum }).eq('id', movingMember.id);
+        await supabase.from('register_list').update({ type: slotNum ? type : movingMember.type, team_slot: slotNum }).eq('id', movingMember.id);
       }
       setMovingMember(null);
       return;
     }
 
-    const nameInput = prompt(`Admin điền tên thành viên cho ô S${slotNum}:`);
-    if (!nameInput) return;
-    const classInput = prompt(`Nhập phái (${Object.keys(classInfo).join(', ')}):`, 'Toái Mộng');
-    if (!Object.keys(classInfo).includes(classInput)) {
-      alert("Sai tên hệ phái! Vui lòng nhập đúng chuẩn.");
+    if (occupant) {
+      setSelectedMember(occupant);
+      setMovingMember(occupant);
       return;
     }
 
+    // Thay vì mở prompt, lưu lại vị trí ô trống đang kích hoạt để mở Giao diện chọn
+    setAssigningSlot({ type, slotNum });
+    setNewCharName('');
+    setNewClassName('Toái Mộng');
+    setSearchUnassigned('');
+  };
+
+  // Hàm xếp một người có sẵn (chưa có vị trí slot) vào ô đang chọn
+  const assignExistingMember = async (memberId) => {
+    if (!assigningSlot) return;
+    const { type, slotNum } = assigningSlot;
+    const { error } = await supabase.from('register_list').update({ type, team_slot: slotNum }).eq('id', memberId);
+    if (!error) {
+      setAssigningSlot(null);
+      fetchData();
+    }
+  };
+
+  // Hàm tạo mới hoàn toàn thành viên trực tiếp vào ô trống
+  const handleCreateAndAssign = async (e) => {
+    e.preventDefault();
+    if (!newCharName.trim() || !assigningSlot) return;
+    const { type, slotNum } = assigningSlot;
+
     const { error } = await supabase.from('register_list').insert([{
-      char_name: nameInput,
-      class_name: classInput,
+      char_name: newCharName.trim(),
+      class_name: newClassName,
       team_slot: slotNum,
       type: type
     }]);
-    if (!error) fetchData();
+    if (!error) {
+      setAssigningSlot(null);
+      fetchData();
+    }
   };
 
-  // --- HÀM THÊM SKILL VÀO NHÂN VẬT (CHỈ ADMIN MỚI ĐƯỢC PHÉP) ---
+  const [memberSkills, setMemberSkills] = useState([]);
   const addSkillToMember = async (url) => {
     if (!isAdmin || !selectedMember || !url) return;
 
@@ -246,16 +259,12 @@ function App() {
     if (!error) fetchData();
   };
 
-  // --- HÀM QUẢN LÝ KHO SKILL (CHỈ ADMIN) ---
   const addToLibrary = async (url) => {
-    if (!isAdmin) return alert("Chỉ Admin mới có quyền chỉnh sửa!");
+    if (!isAdmin) return;
     if (!url) return;
     
     const { error } = await supabase.from('skill_library').insert([{ url }]);
-    
-    if (error) {
-      alert("Lỗi khi lưu vào DB: " + error.message);
-    } else {
+    if (!error) {
       setCustomSkillUrl('');
       fetchData(); 
     }
@@ -304,17 +313,13 @@ function App() {
     }
   };
 
-  // --- LOGIC ĐẾM QUÂN SỐ THỰC TẾ CỦA ĐOÀN ĐÃ TRỪ CHỨC NĂNG VÀ THEO SỐ TEAM GỘP ---
   const getGroupPureCount = (groupName) => {
-    // Tìm xem những Team nào đang được gán vào Đoàn này
     const activeTeamIds = Object.keys(teamGroups).filter(teamId => teamGroups[teamId] === groupName).map(Number);
     if (activeTeamIds.length === 0) return 0;
 
     let totalPure = 0;
     activeTeamIds.forEach(teamId => {
-      // Lấy toàn bộ danh sách trong slot của team này
       const teamMems = members.filter(m => m.type === 'Chính thức' && m.team_slot >= (teamId - 1) * 6 + 1 && m.team_slot <= teamId * 6);
-      // Chỉ tính những người đã điền tên và KHÔNG có bất kỳ chức năng đặc biệt nào (Vật tư, Scout, Trụ)
       const pureMems = teamMems.filter(m => m.char_name && !m.has_item && !m.is_scout && !m.is_tower_team);
       totalPure += pureMems.length;
     });
@@ -322,14 +327,15 @@ function App() {
     return totalPure;
   };
 
-  // Đếm tổng số lượng chức năng trên toàn bộ danh sách để phục vụ hiển thị
   const totalItemsCount = members.filter(m => m.char_name && m.has_item).length;
   const totalScoutsCount = members.filter(m => m.char_name && m.is_scout).length;
   const totalTowersCount = members.filter(m => m.char_name && m.is_tower_team).length;
 
+  // Lọc ra danh sách những thành viên chưa có vị trí (team_slot trống hoặc null) để hiển thị cho admin bấm chọn
+  const unassignedMembers = members.filter(m => !m.team_slot && m.char_name);
+
   const renderSlotCell = (type, slotNum) => {
     const occupant = members.find(m => m.type === type && m.team_slot === slotNum);
-    const isSelected = form.type === type && form.team_slot === slotNum;
     const isBeingMoved = movingMember && movingMember.id === occupant?.id;
     const isLeaderSlot = type === 'Chính thức' && (slotNum - 1) % 6 === 0;
 
@@ -338,8 +344,8 @@ function App() {
         style={{
           height: '42px', margin: '3px 0', borderRadius: '4px', position: 'relative',
           backgroundColor: occupant ? classInfo[occupant.class_name]?.color : '#111',
-          border: isBeingMoved ? '2px solid white' : isSelected ? '2px solid gold' : '1px solid #333',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: occupant ? 'pointer' : (isAdmin ? 'pointer' : 'default'),
+          border: isBeingMoved ? '2px solid white' : (assigningSlot && assigningSlot.type === type && assigningSlot.slotNum === slotNum) ? '2px solid gold' : '1px solid #333',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: isAdmin ? 'pointer' : 'default',
           fontSize: '10px', color: occupant?.class_name === 'Long Ngâm' ? '#000' : 'white', fontWeight: 'bold',
           padding: '0 4px', overflow: 'hidden', opacity: isBeingMoved ? 0.5 : 1,
           transition: 'all 0.1s ease'
@@ -371,7 +377,7 @@ function App() {
         .team-node { 
           position: absolute; border-radius: 50%; 
           display: flex; flex-direction: column; align-items: center; justify-content: center; 
-          font-size: 14px; font-weight: bold; color: #000; 
+          font-size: 13px; font-weight: bold; color: #000; cursor: move; 
           transform: translate(-50%, -50%); border: 2px solid #fff; 
           box-shadow: 0 0 15px rgba(0,0,0,0.8);
           z-index: 10; transition: transform 0.1s;
@@ -379,7 +385,7 @@ function App() {
           width: 36px; height: 36px;
         }
         .team-node:active { transform: translate(-50%, -50%) scale(1.2); z-index: 100; }
-        .marker-remove-btn { position: absolute; top: -6px; right: -6px; background: red; color: white; border: none; border-radius: 50%; width: 14px; height: 14px; font-size: 9px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-weight: bold; }
+        .marker-remove-btn { position: absolute; top: -6px; right: -6px; background: red; color: white; border: none; border-radius: 50%; width: 14px; height: 14px; font-size: 9px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-weight: bold; z-index: 20; }
         .admin-map-controls { display: flex; gap: 10px; justify-content: center; margin-bottom: 15px; flex-wrap: wrap; }
         .control-btn { padding: 6px 12px; font-size: 11px; font-weight: bold; border-radius: 4px; cursor: pointer; border: 1px solid #444; color: white; }
         .skill-box { width: 65px; height: 65px; background: #222; border: 1px solid #444; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #555; position: relative; overflow: visible; }
@@ -388,22 +394,20 @@ function App() {
         .skill-lib-item:hover { border-color: gold; transform: scale(1.1); }
         .lib-remove-btn { position: absolute; top: -5px; right: -5px; background: black; color: red; border: 1px solid red; border-radius: 50%; width: 16px; height: 16px; font-size: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 5; }
         .custom-add-skill { display: flex; gap: 5px; margin-top: 10px; padding: 0 10px; }
-        .custom-input { flex: 1; background: #000; border: 1px solid #444; color: white; padding: 6px; border-radius: 4px; fontSize: 11px; }
-        .upload-btn { background: #333; color: white; border: 1px solid #555; padding: 6px 10px; border-radius: 4px; cursor: pointer; fontSize: 11px; font-weight: bold; }
-        .add-btn { background: #d4af37; color: black; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; fontSize: 11px; font-weight: bold; }
+        .custom-input { flex: 1; background: #000; border: 1px solid #444; color: white; padding: 6px; border-radius: 4px; font-size: 11px; }
+        .upload-btn { background: #333; color: white; border: 1px solid #555; padding: 6px 10px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: bold; }
+        .add-btn { background: #d4af37; color: black; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: bold; }
+        
+        .member-select-chip { padding: 6px 10px; border-radius: 4px; font-size: 11px; font-weight: bold; cursor: pointer; text-align: center; border: 1px solid rgba(255,255,255,0.1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: white; }
+        .member-select-chip:hover { border-color: #fff; transform: scale(1.03); }
       `}</style>
 
       <div style={{ position: 'absolute', top: '10px', right: '10px', display: 'flex', flexDirection: 'column', gap: '5px', alignItems: 'flex-end', zIndex: 100 }}>
         <button onClick={handleAdminLogin} style={{ background: isAdmin ? '#d4af37' : 'transparent', color: isAdmin ? '#000' : '#d4af37', border: '1px solid #d4af37', padding: '5px 10px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>
-          {isAdmin ? "ADMIN: ON" : "ADMIN LOGIN"}
+          {isAdmin ? "MODE: ADMIN CONTROL" : "ADMIN LOGIN"}
         </button>
         {isAdmin && (
-          <>
-            <button onClick={() => setIsLimitEnabled(!isLimitEnabled)} style={{ background: isLimitEnabled ? '#222' : 'red', color: 'white', border: '1px solid #444', padding: '5px 10px', borderRadius: '4px', fontSize: '10px' }}>
-              GIỚI HẠN: {isLimitEnabled ? "BẬT" : "TẤT"}
-            </button>
-            <button onClick={handleResetBoard} style={{ background: 'blue', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '4px', fontSize: '10px' }}>RESET</button>
-          </>
+          <button onClick={handleResetBoard} style={{ background: 'blue', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>RESET DATA WEEK</button>
         )}
       </div>
 
@@ -438,12 +442,12 @@ function App() {
       </div>
       
       {!isAdmin && (
-        <div style={{ margin: '15px auto', padding: '8px 15px', background: '#111', border: '1px dashed #444', borderRadius: '6px', maxWidth: '500px', fontSize: '11px', color: '#aaa' }}>
-          🌐 Chế độ xem công khai. Đăng ký qua kênh Discord. Click vào thành viên để xem bộ kỹ năng (Skill).
+        <div style={{ margin: '15px auto', padding: '8px 15px', background: '#111', border: '1px dashed #444', borderRadius: '6px', maxWidth: '400px', fontSize: '11px', color: '#aaa' }}>
+          🌐 Chế độ xem trực quan. Thành viên đăng ký qua Discord.
         </div>
       )}
 
-      <div className="team-grid">
+      <div className="team-grid" style={{ marginTop: '15px' }}>
         {[...Array(10)].map((_, col) => {
           const teamNum = col + 1;
           const currentGroup = teamGroups[teamNum] || 'Đoàn 1';
@@ -470,19 +474,19 @@ function App() {
         {[...Array(30)].map((_, i) => renderSlotCell('Học việc', i + 1))}
       </div>
 
-      {/* --- BẢN ĐỒ CHỈ HUY CHIẾN THUẬT THEO ĐOÀN --- */}
+      {/* --- BẢN ĐỒ CHỈ HUY CHIẾN THUẬT RÚT GỌN --- */}
       <div className="map-section">
         <h3 style={{ color: 'gold', margin: '0 0 5px 0', fontSize: '18px' }}>CHỈ ĐẠO CHIẾN THUẬT</h3>
         
         {isAdmin && (
           <div className="admin-map-controls">
-            <button className="control-btn" style={{ background: '#7cd826', color: '#000' }} onClick={() => addNewMarker('Đoàn 1')}>+ Thêm Node Đoàn 1</button>
-            <button className="control-btn" style={{ background: '#00ffff', color: '#000' }} onClick={() => addNewMarker('Đoàn 2')}>+ Thêm Node Đoàn 2</button>
-            <button className="control-btn" style={{ background: '#ffd700', color: '#000' }} onClick={() => addNewMarker('Đoàn 3')}>+ Thêm Node Đoàn 3</button>
-            <button className="control-btn" style={{ background: '#ff4500', color: '#fff' }} onClick={() => addNewMarker('Đoàn 4')}>+ Thêm Node Đoàn 4</button>
-            <button className="control-btn" style={{ background: '#555', color: '#fff' }} onClick={() => addNewMarker('item')}>+ Thêm Icon Vật Tư 📦</button>
-            <button className="control-btn" style={{ background: '#555', color: '#fff' }} onClick={() => addNewMarker('scout')}>+ Thêm Icon Scout 🔎</button>
-            <button className="control-btn" style={{ background: '#555', color: '#fff' }} onClick={() => addNewMarker('tower')}>+ Thêm Icon Trụ 🔨</button>
+            <button className="control-btn" style={{ background: '#7cd826', color: '#000' }} onClick={() => addNewMarker('Đoàn 1')}>+ Vòng tròn Đoàn 1</button>
+            <button className="control-btn" style={{ background: '#00ffff', color: '#000' }} onClick={() => addNewMarker('Đoàn 2')}>+ Vòng tròn Đoàn 2</button>
+            <button className="control-btn" style={{ background: '#ffd700', color: '#000' }} onClick={() => addNewMarker('Đoàn 3')}>+ Vòng tròn Đoàn 3</button>
+            <button className="control-btn" style={{ background: '#ff4500', color: '#fff' }} onClick={() => addNewMarker('Đoàn 4')}>+ Vòng tròn Đoàn 4</button>
+            <button className="control-btn" style={{ background: '#555', color: '#fff' }} onClick={() => addNewMarker('item')}>+ Icon Vật Tư 📦</button>
+            <button className="control-btn" style={{ background: '#555', color: '#fff' }} onClick={() => addNewMarker('scout')}>+ Icon Scout 🔎</button>
+            <button className="control-btn" style={{ background: '#555', color: '#fff' }} onClick={() => addNewMarker('tower')}>+ Icon Trụ 🔨</button>
           </div>
         )}
 
@@ -496,7 +500,6 @@ function App() {
             if (pos.marker_type.startsWith('Đoàn')) {
               const currentGroup = pos.marker_type;
               bg = groupSettings[currentGroup]?.border || '#fff';
-              // RÚT GỌN: Lấy số lượng người thực tế và chỉ hiển thị duy nhất số bên trong vòng tròn màu
               label = getGroupPureCount(currentGroup).toString();
             } else if (pos.marker_type === 'item') {
               bg = '#ffd700';
@@ -526,43 +529,82 @@ function App() {
         </div>
       </div>
 
-      {/* MODAL CHI TIẾT - THÀNH VIÊN CHỈ XEM SKILL - ADMIN TOÀN QUYỀN CHỈNH SỬA */}
-      {selectedMember && (
+      {/* MODAL GIAO DIỆN CHỌN NHANH THÀNH VIÊN KHI CLICK Ô TRỐNG */}
+      {assigningSlot && isAdmin && (
+        <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', background: '#141414', padding: '20px', borderRadius: '12px', border: '2px solid gold', zIndex: 1100, width: '90%', maxWidth: '500px', boxShadow: '0 0 40px rgba(0,0,0,0.9)', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ fontSize: '15px', fontWeight: 'bold', color: 'gold', marginBottom: '12px' }}>
+            XẾP THÀNH VIÊN VÀO Ô [S{assigningSlot.slotNum} - {assigningSlot.type}]
+          </div>
+
+          {/* DANH SÁCH THÀNH VIÊN ĐÃ ĐĂNG KÝ CHƯA VÀO ĐỘI */}
+          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden', minHeight: '180px', marginBottom: '15px', background: '#0a0a0a', padding: '10px', borderRadius: '8px', border: '1px solid #222' }}>
+            <div style={{ fontSize: '11px', color: '#888', textAlign: 'left', marginBottom: '6px', fontWeight: 'bold' }}>
+              BẤM VÀO TÊN ĐỂ XẾP NHANH (TỪ DISCORD/DANH SÁCH CHỜ):
+            </div>
+            <input className="custom-input" style={{ marginBottom: '10px', flex: 'none' }} placeholder="Tìm nhanh tên thành viên..." value={searchUnassigned} onChange={(e) => setSearchUnassigned(e.target.value)} />
+            
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', overflowY: 'auto', flex: 1, padding: '2px' }}>
+              {unassignedMembers
+                .filter(m => m.char_name.toLowerCase().includes(searchUnassigned.toLowerCase()))
+                .map(m => (
+                  <div key={m.id} className="member-select-chip" style={{ backgroundColor: classInfo[m.class_name]?.color, color: m.class_name === 'Long Ngâm' ? '#000' : '#fff' }} onClick={() => assignExistingMember(m.id)}>
+                    {m.char_name}
+                  </div>
+                ))}
+              {unassignedMembers.filter(m => m.char_name.toLowerCase().includes(searchUnassigned.toLowerCase())).length === 0 && (
+                <div style={{ gridColumn: 'span 3', color: '#555', fontSize: '11px', padding: '20px 0' }}>Không tìm thấy thành viên phù hợp...</div>
+              )}
+            </div>
+          </div>
+
+          {/* FORM THÊM MỚI HOÀN TOÀN NẾU KHÔNG CÓ TRONG DANH SÁCH */}
+          <form onSubmit={handleCreateAndAssign} style={{ borderTop: '1px solid #222', paddingTop: '12px', textAlign: 'left' }}>
+            <div style={{ fontSize: '11px', color: '#888', marginBottom: '6px', fontWeight: 'bold' }}>HOẶC TẠO MỚI HOÀN TOÀN TẠI Ô NÀY:</div>
+            <div style={{ display: 'flex', gap: '6px' }}>
+              <input className="custom-input" required placeholder="Nhập tên nhân vật mới..." value={newCharName} onChange={(e) => setNewCharName(e.target.value)} />
+              <select className="custom-input" style={{ maxWidth: '120px', cursor: 'pointer' }} value={newClassName} onChange={(e) => setNewClassName(e.target.value)}>
+                {Object.keys(classInfo).map(cls => <option key={cls} value={cls}>{cls}</option>)}
+              </select>
+              <button type="submit" className="add-btn" style={{ height: '31px' }}>THÊM</button>
+            </div>
+          </form>
+
+          <button onClick={() => setAssigningSlot(null)} style={{ background: '#333', color: 'white', border: 'none', padding: '8px', borderRadius: '6px', fontWeight: 'bold', marginTop: '15px', width: '100%', cursor: 'pointer' }}>ĐÓNG</button>
+        </div>
+      )}
+
+      {/* MODAL ĐIỀU CHỈNH CHỨC NĂNG - CHỈ HIỂN THỊ KHI ĐANG Ở QUYỀN ADMIN */}
+      {selectedMember && isAdmin && (
         <div style={{ position: 'fixed', bottom: '20px', left: '50%', transform: 'translateX(-50%)', background: '#1a1a1a', padding: '20px', borderRadius: '15px', border: '2px solid gold', zIndex: 1000, width: '90%', maxWidth: '420px', boxShadow: '0 0 30px rgba(0,0,0,1)' }}>
           <div style={{ marginBottom: '5px', fontWeight: 'bold', color: classInfo[selectedMember.class_name]?.color, fontSize: '18px' }}>{selectedMember.char_name}</div>
           <div style={{ fontSize: '11px', color: '#888', marginBottom: '15px' }}>Hệ: {selectedMember.class_name} | {selectedMember.type}</div>
 
-          {/* CHỈ HIỂN THỊ KHO SKILL ĐỂ CHỌN KHI LÀ ADMIN */}
-          {isAdmin && (
-            <div style={{ marginBottom: '15px', background: '#222', padding: '10px', borderRadius: '8px' }}>
-              <div style={{ fontSize: '10px', color: 'gold', marginBottom: '8px' }}>CHỌN SKILL (ADMIN)</div>
-              <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap', maxHeight: '150px', overflowY: 'auto', padding: '5px' }}>
-                {skillLibrary.map((item) => (
-                  <div key={item.id} className="skill-lib-item-container">
-                    <img src={item.url} className="skill-lib-item" onClick={() => addSkillToMember(item.url)} alt="skill" />
-                    <div className="lib-remove-btn" onClick={(e) => { e.stopPropagation(); removeFromLibrary(item.id); }}>×</div>
-                  </div>
-                ))}
-                {skillLibrary.length === 0 && <div style={{fontSize: '10px', color: '#555'}}>Kho skill trống...</div>}
-              </div>
-
-              <div style={{ marginTop: '10px', borderTop: '1px solid #333', paddingTop: '10px' }}>
-                <div style={{ fontSize: '9px', color: '#888', marginBottom: '5px' }}>ADMIN: THÊM SKILL MỚI VÀO KHO</div>
-                <div className="custom-add-skill">
-                  <input className="custom-input" placeholder="Link ảnh skill..." value={customSkillUrl} onChange={(e) => setCustomSkillUrl(e.target.value)} />
-                  <button className="add-btn" onClick={() => addToLibrary(customSkillUrl)}>THÊM</button>
-                  <label className="upload-btn">
-                    TẢI ẢNH
-                    <input type="file" accept="image/*" hidden onChange={handleFileChange} />
-                  </label>
+          <div style={{ marginBottom: '15px', background: '#222', padding: '10px', borderRadius: '8px' }}>
+            <div style={{ fontSize: '10px', color: 'gold', marginBottom: '8px' }}>KHO SKILL CHUNG</div>
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap', maxHeight: '150px', overflowY: 'auto', padding: '5px' }}>
+              {skillLibrary.map((item) => (
+                <div key={item.id} className="skill-lib-item-container">
+                  <img src={item.url} className="skill-lib-item" onClick={() => addSkillToMember(item.url)} alt="skill" />
+                  <div className="lib-remove-btn" onClick={(e) => { e.stopPropagation(); removeFromLibrary(item.id); }}>×</div>
                 </div>
+              ))}
+              {skillLibrary.length === 0 && <div style={{fontSize: '10px', color: '#555'}}>Kho trống...</div>}
+            </div>
+
+            <div style={{ marginTop: '10px', borderTop: '1px solid #333', paddingTop: '10px' }}>
+              <div style={{ fontSize: '9px', color: '#888', marginBottom: '5px' }}>THÊM SKILL MỚI VÀO KHO</div>
+              <div className="custom-add-skill">
+                <input className="custom-input" placeholder="Link ảnh skill..." value={customSkillUrl} onChange={(e) => setCustomSkillUrl(e.target.value)} />
+                <button className="add-btn" onClick={() => addToLibrary(customSkillUrl)}>THÊM</button>
+                <label className="upload-btn">
+                  TẢI ẢNH
+                  <input type="file" accept="image/*" hidden onChange={handleFileChange} />
+                </label>
               </div>
             </div>
-          )}
+          </div>
 
-          {/* BỘ SKILL ĐANG MANG - HIỂN THỊ CHO CẢ HAI NHƯNG CHỈ ADMIN MỚI CÓ NÚT XÓA (X) */}
-          <div style={{ fontSize: '11px', color: 'gold', marginBottom: '8px', textAlign: 'left', fontWeight: 'bold' }}>🎯 BỘ KỸ NĂNG ĐANG MANG:</div>
-          <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginBottom: '20px', background: 'rgba(0,0,0,0.4)', padding: '10px', borderRadius: '8px' }}>
+          <div style={{ display: 'flex', justify-content: 'center', gap: '8px', marginBottom: '20px', background: 'rgba(0,0,0,0.4)', padding: '10px', borderRadius: '8px' }}>
             {[0, 1, 2, 3, 4].map(i => {
               const skill = memberSkills.find(s => s.member_id === selectedMember.id && parseInt(s.pos_x) === i);
               return (
@@ -570,9 +612,7 @@ function App() {
                   {skill ? (
                     <>
                       <img src={skill.skill_url} style={{ width: '100%', height: '100%', borderRadius: '6px' }} alt="equipped" />
-                      {isAdmin && (
-                        <div onClick={() => removeSkillFromMember(skill.id)} style={{ position: 'absolute', top: '-5px', right: '-5px', background: 'red', color: 'white', width: '18px', height: '18px', borderRadius: '50%', fontSize: '11px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', border: '1px solid white' }}>×</div>
-                      )}
+                      <div onClick={() => removeSkillFromMember(skill.id)} style={{ position: 'absolute', top: '-5px', right: '-5px', background: 'red', color: 'white', width: '18px', height: '18px', borderRadius: '50%', fontSize: '11px', cursor: 'pointer', display: 'flex', alignItems: 'center', justify-content: 'center', fontWeight: 'bold', border: '1px solid white' }}>×</div>
                     </>
                   ) : 'Trống'}
                 </div>
@@ -580,34 +620,22 @@ function App() {
             })}
           </div>
 
-          {/* KHU VỰC CHỨC NĂNG PHÂN QUYỀN */}
-          {isAdmin ? (
-            <>
-              {/* Nút bật tắt Scout và Trụ dành riêng cho Admin */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', marginBottom: '10px' }}>
-                <button onClick={toggleScout} style={{ background: selectedMember.is_scout ? '#00ffff' : '#333', color: selectedMember.is_scout ? '#000' : '#fff', border: 'none', padding: '8px', borderRadius: '6px', fontWeight: 'bold', fontSize: '11px' }}>
-                  {selectedMember.is_scout ? "BỎ SCOUT 🔎" : "SCOUT 🔎"}
-                </button>
-                <button onClick={toggleTowerTeam} style={{ background: selectedMember.is_tower_team ? '#ff4500' : '#fff', color: selectedMember.is_tower_team ? '#fff' : '#000', border: 'none', padding: '8px', borderRadius: '6px', fontWeight: 'bold', fontSize: '11px' }}>
-                  {selectedMember.is_tower_team ? "BỎ TEAM TRỤ 🔨" : "TEAM TRỤ 🔨"}
-                </button>
-              </div>
-
-              {/* Nút Vật Tư, Xóa và Đóng dành riêng cho Admin */}
-              <div style={{ display: 'flex', gap: '10px' }}>
-                <button onClick={toggleItem} style={{ flex: 1, background: selectedMember.has_item ? '#444' : '#28a745', color: 'white', border: 'none', padding: '10px', borderRadius: '6px', fontWeight: 'bold' }}>
-                    {selectedMember.has_item ? "BỎ VẬT TƯ" : "VẬT TƯ 📦"}
-                </button>
-                <button onClick={deleteMember} style={{ background: '#dc3545', color: 'white', border: 'none', padding: '10px', borderRadius: '6px', fontWeight: 'bold' }}>XÓA</button>
-                <button onClick={() => setSelectedMember(null)} style={{ background: '#333', color: 'white', border: 'none', padding: '10px', borderRadius: '6px', fontWeight: 'bold', minWidth: '80px' }}>ĐÓNG</button>
-              </div>
-            </>
-          ) : (
-            /* CHỈ HIỂN THỊ NÚT ĐÓNG DÀNH CHO THÀNH VIÊN THƯỜNG */
-            <button onClick={() => setSelectedMember(null)} style={{ background: '#333', color: 'white', border: 'none', padding: '12px', borderRadius: '6px', fontWeight: 'bold', width: '100%', cursor: 'pointer' }}>
-              ĐÓNG CHẾ ĐỘ XEM
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', marginBottom: '10px' }}>
+            <button onClick={toggleScout} style={{ background: selectedMember.is_scout ? '#00ffff' : '#333', color: selectedMember.is_scout ? '#000' : '#fff', border: 'none', padding: '8px', borderRadius: '6px', fontWeight: 'bold', fontSize: '11px' }}>
+              {selectedMember.is_scout ? "BỎ SCOUT 🔎" : "SCOUT 🔎"}
             </button>
-          )}
+            <button onClick={toggleTowerTeam} style={{ background: selectedMember.is_tower_team ? '#ff4500' : '#fff', color: selectedMember.is_tower_team ? '#fff' : '#000', border: 'none', padding: '8px', borderRadius: '6px', fontWeight: 'bold', fontSize: '11px' }}>
+              {selectedMember.is_tower_team ? "BỎ TEAM TRỤ 🔨" : "TEAM TRỤ 🔨"}
+            </button>
+          </div>
+
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button onClick={toggleItem} style={{ flex: 1, background: selectedMember.has_item ? '#444' : '#28a745', color: 'white', border: 'none', padding: '10px', borderRadius: '6px', fontWeight: 'bold' }}>
+                {selectedMember.has_item ? "BỎ VẬT TƯ" : "VẬT TƯ 📦"}
+            </button>
+            <button onClick={deleteMember} style={{ background: '#dc3545', color: 'white', border: 'none', padding: '10px', borderRadius: '6px', fontWeight: 'bold' }}>XÓA HẲN</button>
+            <button onClick={() => setSelectedMember(null)} style={{ background: '#333', color: 'white', border: 'none', padding: '10px', borderRadius: '6px', fontWeight: 'bold', minWidth: '80px' }}>ĐÓNG</button>
+          </div>
         </div>
       )}
     </div>
