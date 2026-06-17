@@ -32,8 +32,7 @@ function App() {
   const [selectedMember, setSelectedMember] = useState(null);
   const [form, setForm] = useState({ char_name: '', class_name: 'Toái Mộng', team_slot: null, type: 'Chính thức' });
   const [teamGroups, setTeamGroups] = useState({});
-  const [teamPositions, setTeamPositions] = useState({});
-  const [memberSkills, setMemberSkills] = useState([]);
+  const [teamPositions, setTeamPositions] = useState([]); // Chuyển thành Mảng để chứa số lượng icon thoải mái
   
   // --- STATE CHO KHO SKILL ĐỘNG ---
   const [skillLibrary, setSkillLibrary] = useState([]);
@@ -56,8 +55,7 @@ function App() {
       setTeamGroups(groupMap);
     }
     if (positions) {
-      const posMap = Object.fromEntries(positions.map(p => [p.team_id, { x: p.pos_x, y: p.pos_y }]));
-      setTeamPositions(posMap);
+      setTeamPositions(positions);
     }
   }, []);
 
@@ -73,19 +71,33 @@ function App() {
     return () => supabase.removeChannel(channel);
   }, [fetchData]);
 
-  const updateTeamPosition = async (teamId, x, y) => {
-    setTeamPositions(prev => ({ ...prev, [teamId]: { x, y } }));
-    await supabase.from('team_positions').update({ pos_x: x, pos_y: y }).eq('team_id', teamId);
+  const updateTeamPosition = async (id, x, y) => {
+    setTeamPositions(prev => prev.map(p => p.id === id ? { ...p, pos_x: x, pos_y: y } : p));
+    await supabase.from('team_positions').update({ pos_x: x, pos_y: y }).eq('id', id);
   };
 
-  const handleDragEnd = (e, teamId) => {
+  const handleDragEnd = (e, id) => {
     if (!mapRef.current) return;
     const rect = mapRef.current.getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width) * 100;
     const y = ((e.clientY - rect.top) / rect.height) * 100;
     const safeX = Math.max(0, Math.min(100, x));
     const safeY = Math.max(0, Math.min(100, y));
-    updateTeamPosition(teamId, safeX, safeY);
+    updateTeamPosition(id, safeX, safeY);
+  };
+
+  // Hàm thêm mới 1 mục tiêu/vị trí icon lên bản đồ (Thoải mái số lượng)
+  const addNewMarker = async (type) => {
+    if (!isAdmin) return;
+    await supabase.from('team_positions').insert([{ marker_type: type, pos_x: 50, pos_y: 50 }]);
+    fetchData();
+  };
+
+  // Hàm xóa icon khỏi bản đồ
+  const removeMarker = async (id) => {
+    if (!isAdmin) return;
+    await supabase.from('team_positions').delete().eq('id', id);
+    fetchData();
   };
 
   const handleGroupChange = async (teamId, newGroupName) => {
@@ -110,6 +122,7 @@ function App() {
   const handleResetBoard = async () => {
     if (window.confirm("Xóa sạch danh sách tuần này?")) {
       await supabase.from('member_skills').delete().neq('id', 0);
+      await supabase.from('team_positions').delete().neq('id', 0);
       const { error } = await supabase.from('register_list').delete().neq('id', 0);
       if (!error) fetchData();
     }
@@ -118,6 +131,26 @@ function App() {
   const toggleItem = async () => {
     if (!selectedMember) return;
     const { error } = await supabase.from('register_list').update({ has_item: !selectedMember.has_item }).eq('id', selectedMember.id);
+    if (!error) {
+      await fetchData();
+      setSelectedMember(null);
+    }
+  };
+
+  // Thêm chức năng bật tắt Scout cho thành viên
+  const toggleScout = async () => {
+    if (!selectedMember) return;
+    const { error } = await supabase.from('register_list').update({ is_scout: !selectedMember.is_scout }).eq('id', selectedMember.id);
+    if (!error) {
+      await fetchData();
+      setSelectedMember(null);
+    }
+  };
+
+  // Thêm chức năng bật tắt Team Trụ cho thành viên
+  const toggleTowerTeam = async () => {
+    if (!selectedMember) return;
+    const { error } = await supabase.from('register_list').update({ is_tower_team: !selectedMember.is_tower_team }).eq('id', selectedMember.id);
     if (!error) {
       await fetchData();
       setSelectedMember(null);
@@ -162,10 +195,10 @@ function App() {
   };
 
   // --- HÀM THÊM SKILL VÀO NHÂN VẬT (CHỈ CHỦ SỞ HỮU HOẶC ADMIN) ---
+  const [memberSkills, setMemberSkills] = useState([]);
   const addSkillToMember = async (url) => {
     if (!selectedMember || !url) return;
 
-    // Kiểm tra quyền: Phải là Admin HOẶC là chính nhân vật đó
     const isOwner = selectedMember.char_name === localStorage.getItem('my_char_name');
     if (!isAdmin && !isOwner) {
       return alert("Bạn chỉ có thể trang bị kỹ năng cho nhân vật của chính mình!");
@@ -192,7 +225,7 @@ function App() {
   };
 
   // --- HÀM QUẢN LÝ KHO SKILL (CHỈ ADMIN) ---
-const addToLibrary = async (url) => {
+  const addToLibrary = async (url) => {
     if (!isAdmin) return alert("Chỉ Admin mới có quyền chỉnh sửa!");
     if (!url) return;
     
@@ -205,7 +238,7 @@ const addToLibrary = async (url) => {
     } else {
       console.log("Tải lên thành công!");
       setCustomSkillUrl('');
-      fetchData(); // Cập nhật lại giao diện
+      fetchData(); 
     }
   };
 
@@ -217,11 +250,10 @@ const addToLibrary = async (url) => {
     }
   };
 
- const handleFileChange = (e) => {
+  const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
-    // Kiểm tra dung lượng file (Giới hạn dưới 1MB để tránh lỗi chuỗi quá dài)
     if (file.size > 1024 * 1024) {
       alert("File quá lớn! Vui lòng chọn ảnh dưới 1MB.");
       return;
@@ -237,7 +269,6 @@ const addToLibrary = async (url) => {
   };
 
   const removeSkillFromMember = async (id) => {
-    // Kiểm tra quyền trước khi xóa
     const isOwner = selectedMember?.char_name === localStorage.getItem('my_char_name');
     if (!isAdmin && !isOwner) return;
 
@@ -273,6 +304,19 @@ const addToLibrary = async (url) => {
     }
   };
 
+  // Logic đếm số lượng người thực tế trong Team sau khi trừ đi các chức năng đặc biệt
+  const getTeamPureCount = (teamNum) => {
+    const teamMems = members.filter(m => m.type === 'Chính thức' && m.team_slot >= (teamNum - 1) * 6 + 1 && m.team_slot <= teamNum * 6);
+    // Trừ đi người có Vật tư, Scout, hoặc thuộc Team Trụ
+    const pureMems = teamMems.filter(m => !m.has_item && !m.is_scout && !m.is_tower_team && m.char_name);
+    return pureMems.length;
+  };
+
+  // Đếm tổng số lượng chức năng trên toàn bộ danh sách để phục vụ hiển thị
+  const totalItemsCount = members.filter(m => m.char_name && m.has_item).length;
+  const totalScoutsCount = members.filter(m => m.char_name && m.is_scout).length;
+  const totalTowersCount = members.filter(m => m.char_name && m.is_tower_team).length;
+
   const renderSlotCell = (type, slotNum) => {
     const occupant = members.find(m => m.type === type && m.team_slot === slotNum);
     const isSelected = form.type === type && form.team_slot === slotNum;
@@ -294,7 +338,10 @@ const addToLibrary = async (url) => {
         {isLeaderSlot && <span style={{ position: 'absolute', top: '1px', left: '2px', fontSize: '8px', opacity: 0.8 }}>🔑</span>}
         {occupant ? (
           <div style={{ width: '100%', textAlign: 'center', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', pointerEvents: 'none' }}>
-            {occupant.char_name} {occupant.has_item && '📦'}
+            {occupant.char_name} 
+            {occupant.has_item && '📦'}
+            {occupant.is_scout && '🔎'}
+            {occupant.is_tower_team && '🔨'}
           </div>
         ) : `S${slotNum}`}
       </div>
@@ -312,15 +359,18 @@ const addToLibrary = async (url) => {
         .map-container { position: relative; width: 100%; border-radius: 8px; overflow: hidden; border: 2px solid #444; margin-top: 15px; }
         .map-bg { width: 100%; display: block; opacity: 0.8; pointer-events: none; -webkit-user-drag: none; }
         .team-node { 
-          position: absolute; width: 34px; height: 34px; border-radius: 50%; 
-          display: flex; align-items: center; justify-content: center; 
-          font-size: 12px; font-weight: bold; color: #000; cursor: move; 
+          position: absolute; width: 36px; height: 36px; border-radius: 50%; 
+          display: flex; flex-direction: column; align-items: center; justify-content: center; 
+          font-size: 11px; font-weight: bold; color: #000; cursor: move; 
           transform: translate(-50%, -50%); border: 2px solid #fff; 
           box-shadow: 0 0 15px rgba(0,0,0,0.8);
           z-index: 10; transition: transform 0.1s;
           touch-action: none;
         }
         .team-node:active { transform: translate(-50%, -50%) scale(1.2); z-index: 100; }
+        .marker-remove-btn { position: absolute; top: -6px; right: -6px; background: red; color: white; border: none; border-radius: 50%; width: 14px; height: 14px; font-size: 9px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-weight: bold; }
+        .admin-map-controls { display: flex; gap: 10px; justify-content: center; margin-bottom: 15px; }
+        .control-btn { padding: 6px 12px; font-size: 11px; font-weight: bold; border-radius: 4px; cursor: pointer; border: 1px solid #444; color: white; }
         .skill-box { width: 65px; height: 65px; background: #222; border: 1px solid #444; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #555; position: relative; overflow: visible; }
         .skill-lib-item-container { position: relative; }
         .skill-lib-item { width: 60px; height: 60px; cursor: pointer; border-radius: 6px; border: 1px solid #333; transition: transform 0.1s; }
@@ -356,9 +406,23 @@ const addToLibrary = async (url) => {
             <div style={{ fontSize: '14px' }}>{members.filter(m => m.class_name === cls).length}</div>
           </div>
         ))}
-        <div style={{ paddingLeft: '8px', borderLeft: '2px solid #333' }}>
-          <div style={{ fontSize: '10px', fontWeight: 'bold', color: '#00FF00' }}>QUÂN SỐ</div>
-          <div style={{ fontSize: '14px', color: '#00FF00' }}>{officialCount} / 60</div>
+        <div style={{ paddingLeft: '8px', borderLeft: '2px solid #333', display: 'flex', gap: '15px' }}>
+          <div>
+            <div style={{ fontSize: '10px', fontWeight: 'bold', color: '#00FF00' }}>QUÂN SỐ</div>
+            <div style={{ fontSize: '14px', color: '#00FF00' }}>{officialCount} / 60</div>
+          </div>
+          <div>
+            <div style={{ fontSize: '10px', fontWeight: 'bold', color: '#ffff00' }}>📦 VẬT TƯ</div>
+            <div style={{ fontSize: '14px', color: '#ffff00' }}>{totalItemsCount}</div>
+          </div>
+          <div>
+            <div style={{ fontSize: '10px', fontWeight: 'bold', color: '#00ffff' }}>🔎 SCOUT</div>
+            <div style={{ fontSize: '14px', color: '#00ffff' }}>{totalScoutsCount}</div>
+          </div>
+          <div>
+            <div style={{ fontSize: '10px', fontWeight: 'bold', color: '#ff4500' }}>🔨 TRỤ</div>
+            <div style={{ fontSize: '14px', color: '#ff4500' }}>{totalTowersCount}</div>
+          </div>
         </div>
       </div>
       
@@ -399,23 +463,57 @@ const addToLibrary = async (url) => {
         {[...Array(30)].map((_, i) => renderSlotCell('Học việc', i + 1))}
       </div>
 
+      {/* --- PHẦN BẢN ĐỒ TƯƠNG TÁC ĐÃ ĐƯỢC NÂNG CẤP HOÀN TOÀN --- */}
       <div className="map-section">
         <h3 style={{ color: 'gold', margin: '0 0 5px 0', fontSize: '18px' }}>CHỈ ĐẠO CHIẾN THUẬT</h3>
+        
+        {isAdmin && (
+          <div className="admin-map-controls">
+            <button className="control-btn" style={{ background: '#7cd826', color: '#000' }} onClick={() => addNewMarker('team')}>+ Thêm Node Team</button>
+            <button className="control-btn" style={{ background: '#ffd700', color: '#000' }} onClick={() => addNewMarker('item')}>+ Thêm Icon Vật Tư 📦</button>
+            <button className="control-btn" style={{ background: '#00ffff', color: '#000' }} onClick={() => addNewMarker('scout')}>+ Thêm Icon Scout 🔎</button>
+            <button className="control-btn" style={{ background: '#ff4500', color: '#fff' }} onClick={() => addNewMarker('tower')}>+ Thêm Icon Trụ 🔨</button>
+          </div>
+        )}
+
         <div className="map-container" ref={mapRef}>
           <img src="https://i.postimg.cc/SsMMSZLG/unnam2ed.jpg" alt="Tactical Map" className="map-bg" />
-          {[...Array(10)].map((_, i) => {
-            const teamId = i + 1;
-            const pos = teamPositions[teamId] || { x: 8 * teamId, y: 15 };
-            const groupColor = groupSettings[teamGroups[teamId] || 'Nhóm 1'].border;
+          
+          {teamPositions.map((pos, index) => {
+            let bg = '#fff';
+            let label = '';
+            
+            // Xác định giao diện dựa trên loại marker_type
+            if (pos.marker_type.startsWith('team')) {
+              bg = '#7cd826';
+              // Đếm số lượng thành viên thực tế của Team này (Ví dụ Node Team đầu tiên ứng với Team 1, tiếp theo Team 2...)
+              const calculatedTeamNum = (teamPositions.filter((p, i) => p.marker_type === 'team' && i < index).length) + 1;
+              label = `T${calculatedTeamNum > 10 ? calculatedTeamNum : calculatedTeamNum} (${getTeamPureCount(calculatedTeamNum)})`;
+            } else if (pos.marker_type === 'item') {
+              bg = '#ffd700';
+              label = '📦';
+            } else if (pos.marker_type === 'scout') {
+              bg = '#00ffff';
+              label = '🔎';
+            } else if (pos.marker_type === 'tower') {
+              bg = '#ff4500';
+              label = '🔨';
+            }
+
             return (
-              <div key={teamId} draggable={isAdmin} onDragEnd={(e) => handleDragEnd(e, teamId)} className="team-node"
+              <div key={pos.id} draggable={isAdmin} onDragEnd={(e) => handleDragEnd(e, pos.id)} className="team-node"
                 style={{ 
-                  left: `${pos.x}%`, top: `${pos.y}%`, 
-                  backgroundColor: groupColor === '#444' ? '#fff' : groupColor,
+                  left: `${pos.pos_x}%`, top: `${pos.pos_y}%`, 
+                  backgroundColor: bg,
+                  width: pos.marker_type.startsWith('team') ? '52px' : '34px',
+                  height: pos.marker_type.startsWith('team') ? '34px' : '34px',
+                  borderRadius: pos.marker_type.startsWith('team') ? '6px' : '50%',
+                  fontSize: '10px',
                   cursor: isAdmin ? 'move' : 'default'
                 }}
               >
-                T{teamId}
+                {label}
+                {isAdmin && <button className="marker-remove-btn" onClick={() => removeMarker(pos.id)}>×</button>}
               </div>
             );
           })}
@@ -437,14 +535,12 @@ const addToLibrary = async (url) => {
               {skillLibrary.map((item) => (
                 <div key={item.id} className="skill-lib-item-container">
                   <img src={item.url} className="skill-lib-item" onClick={() => addSkillToMember(item.url)} alt="skill" />
-                  {/* CHỈ ADMIN THẤY NÚT XÓA KHỎI KHO */}
                   {isAdmin && <div className="lib-remove-btn" onClick={(e) => { e.stopPropagation(); removeFromLibrary(item.id); }}>×</div>}
                 </div>
               ))}
               {skillLibrary.length === 0 && <div style={{fontSize: '10px', color: '#555'}}>Kho skill trống...</div>}
             </div>
 
-            {/* --- CHỈ ADMIN CÓ QUYỀN THÊM SKILL MỚI VÀO KHO CHUNG --- */}
             {isAdmin && (
               <div style={{ marginTop: '10px', borderTop: '1px solid #333', paddingTop: '10px' }}>
                 <div style={{ fontSize: '9px', color: '#888', marginBottom: '5px' }}>ADMIN: THÊM SKILL MỚI VÀO KHO</div>
@@ -477,6 +573,20 @@ const addToLibrary = async (url) => {
                 </div>
               );
             })}
+          </div>
+
+          {/* Hộp thoại chức năng bổ sung nút gạt cho Scout và Team Trụ */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', marginBottom: '10px' }}>
+            {(isAdmin || selectedMember.char_name === localStorage.getItem('my_char_name')) && (
+              <>
+                <button onClick={toggleScout} style={{ background: selectedMember.is_scout ? '#00ffff' : '#333', color: selectedMember.is_scout ? '#000' : '#fff', border: 'none', padding: '8px', borderRadius: '6px', fontWeight: 'bold', fontSize: '11px' }}>
+                  {selectedMember.is_scout ? "BỎ SCOUT 🔎" : "SCOUT 🔎"}
+                </button>
+                <button onClick={toggleTowerTeam} style={{ background: selectedMember.is_tower_team ? '#ff4500' : '#333', color: '#white', border: 'none', padding: '8px', borderRadius: '6px', fontWeight: 'bold', fontSize: '11px' }}>
+                  {selectedMember.is_tower_team ? "BỎ TEAM TRỤ 🔨" : "TEAM TRỤ 🔨"}
+                </button>
+              </>
+            )}
           </div>
 
           <div style={{ display: 'flex', gap: '10px' }}>
