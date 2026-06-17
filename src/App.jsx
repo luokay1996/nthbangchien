@@ -178,19 +178,16 @@ function App() {
     }
   };
 
-  // ĐÃ SỬA: Cho phép cả thành viên thường click vào để xem thông tin chi tiết
   const handleSlotClick = async (type, slotNum) => {
     const occupant = members.find(m => m.type === type && m.team_slot === slotNum);
     
-    // Nếu KHÔNG PHẢI ADMIN thì chỉ được phép xem (nếu ô đó có người)
     if (!isAdmin) {
       if (occupant) {
-        setSelectedMember(occupant); // Mở Modal hiển thị chi tiết cho thành viên xem
+        setSelectedMember(occupant); 
       }
       return; 
     }
 
-    // --- LOGIC XỬ LÝ DÀNH RIÊNG CHO ADMIN ---
     if (movingMember) {
       if (movingMember.type === type && movingMember.team_slot === slotNum) {
         setMovingMember(null);
@@ -381,7 +378,6 @@ function App() {
     }
   };
 
-  // ĐÃ SỬA: Cho phép thành viên click vào chip ở list chờ để xem profile nhanh
   const handleWaitingItemClick = (member) => {
     setSelectedMember(member);
   };
@@ -738,13 +734,13 @@ function App() {
         </div>
       )}
 
-      {/* MODAL ĐIỀU CHỈNH HOẶC XEM PROFILE THÀNH VIÊN: ĐÃ MỞ CHO PHÉP THÀNH VIÊN THƯỜNG XEM */}
+      {/* MODAL ĐIỀU CHỈNH HOẶC XEM PROFILE THÀNH VIÊN */}
       {selectedMember && (
         <div style={{ position: 'fixed', bottom: '20px', left: '50%', transform: 'translateX(-50%)', background: '#1a1a1a', padding: '20px', borderRadius: '15px', border: '2px solid gold', zIndex: 1000, width: '90%', maxWidth: '420px', boxShadow: '0 0 30px rgba(0,0,0,1)' }}>
           <div style={{ marginBottom: '5px', fontWeight: 'bold', color: classInfo[selectedMember.class_name]?.color || '#fff', fontSize: '18px' }}>{selectedMember.char_name}</div>
           <div style={{ fontSize: '11px', color: '#888', marginBottom: '15px' }}>Hệ: {selectedMember.class_name || 'Chưa chọn'} | {selectedMember.type}</div>
 
-          {/* KHO SKILL CHUNG (Chỉ hiển thị cho phép quản lý khi là Admin) */}
+          {/* KHO SKILL CHUNG (Chỉ dành cho Admin) */}
           {isAdmin && (
             <div style={{ marginBottom: '15px', background: '#222', padding: '10px', borderRadius: '8px' }}>
               <div style={{ fontSize: '10px', color: 'gold', marginBottom: '8px' }}>KHO SKILL CHUNG (ADMIN)</div>
@@ -771,7 +767,7 @@ function App() {
             </div>
           )}
 
-          {/* BỘ KỸ NĂNG ĐANG TRANG BỊ (Cả thành viên thường và Admin đều nhìn thấy) */}
+          {/* BỘ KỸ NĂNG ĐANG TRANG BỊ */}
           <div style={{ marginBottom: '15px' }}>
             <div style={{ fontSize: '11px', color: 'gold', marginBottom: '8px', fontWeight: 'bold' }}>BỘ KỸ NĂNG ĐÃ TRANG BỊ</div>
             <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', background: 'rgba(0,0,0,0.4)', padding: '10px', borderRadius: '8px' }}>
@@ -783,7 +779,7 @@ function App() {
                       <>
                         <img src={skill.skill_url} style={{ width: '100%', height: '100%', borderRadius: '6px' }} alt="equipped" />
                         {isAdmin && (
-                          <div onClick={() => removeSkillFromMember(skill.id)} style={{ position: 'absolute', top: '-5px', right: '-5px', background: 'red', color: 'white', width: '18px', height: '18px', borderRadius: '50%', fontSize: '11px', cursor: 'pointer', display: 'flex', alignItems: 'center', justify-content: center, fontWeight: 'bold', border: '1px solid white' }}>×</div>
+                          <div onClick={() => removeSkillFromMember(skill.id)} style={{ position: 'absolute', top: '-5px', right: '-5px', background: 'red', color: 'white', width: '18px', height: '18px', borderRadius: '50%', fontSize: '11px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', border: '1px solid white' }}>×</div>
                         )}
                       </>
                     ) : 'Trống'}
@@ -800,7 +796,7 @@ function App() {
             <div>Vật tư: {selectedMember.has_item ? '📦 Có' : '❌ Không'}</div>
           </div>
 
-          {/* KHU VỰC ĐIỀU CHỈNH TRẠNG THÁI (Chỉ hiển thị nút điều khiển khi là Admin) */}
+          {/* CÁC NÚT ĐIỀU CHỈNH TRẠNG THÁI (Chỉ Admin mới có) */}
           {isAdmin && (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', marginBottom: '10px' }}>
               <button type="button" onClick={toggleScout} style={{ background: selectedMember.is_scout ? '#00ffff' : '#333', color: selectedMember.is_scout ? '#000' : '#fff', border: 'none', padding: '8px', borderRadius: '6px', fontWeight: 'bold', fontSize: '11px' }}>
@@ -812,7 +808,7 @@ function App() {
             </div>
           )}
 
-          {/* HÀNG NÚT DƯỚI CÙNG (Tự ẩn các nút xóa/vật tư nếu là member thường) */}
+          {/* HÀNG NÚT ĐÓNG / THAO TÁC HỆ THỐNG */}
           <div style={{ display: 'flex', gap: '10px' }}>
             {isAdmin && (
               <>
