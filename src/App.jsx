@@ -18,7 +18,7 @@ const classInfo = {
 
 const groupSettings = {
   'Đoàn 1': { bg: 'rgba(255, 255, 255, 0.05)', border: '#7cd826', label: '#7cd826' },
-  'Đoàn 2': { bg: 'rgba(0, 255, 255, 0.12)', border: '#00ffff', label: '#00ffff' },
+  'Đoàn 2': { bg: 'rgba(0, 255, 255, 0.12)', border: '#ae14dd', label: '#00ffff' },
   'Đoàn 3': { bg: 'rgba(255, 215, 0, 0.12)', border: '#ffd700', label: '#ffd700' },
   'Đoàn 4': { bg: 'rgba(255, 69, 0, 0.15)', border: '#ff4500', label: '#ff4500' },
 };
@@ -419,17 +419,18 @@ function App() {
 
     return (
       <div key={`${type}-${slotNum}`} onClick={() => handleSlotClick(type, slotNum)}
+        className="slot-cell"
         style={{
-          height: '42px', margin: '3px 0', borderRadius: '4px', position: 'relative',
+          borderRadius: '4px', position: 'relative',
           backgroundColor: occupant ? (classInfo[occupant.class_name]?.color || '#444') : '#111',
           border: isBeingMoved ? '2px solid white' : (assigningSlot && assigningSlot.type === type && assigningSlot.slotNum === slotNum) ? '2px solid gold' : '1px solid #333',
           display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
-          fontSize: '10px', color: occupant?.class_name === 'Long Ngâm' ? '#000' : 'white', fontWeight: 'bold',
+          color: occupant?.class_name === 'Long Ngâm' ? '#000' : 'white', fontWeight: 'bold',
           padding: '0 4px', overflow: 'hidden', opacity: isBeingMoved ? 0.5 : 1,
           transition: 'all 0.1s ease'
         }}
       >
-        {isLeaderSlot && <span style={{ position: 'absolute', top: '1px', left: '2px', fontSize: '8px', opacity: 0.8 }}>🔑</span>}
+        {isLeaderSlot && <span className="leader-icon" style={{ position: 'absolute', top: '2px', left: '3px', opacity: 0.8 }}>🔑</span>}
         {occupant ? (
           <div style={{ width: '100%', textAlign: 'center', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', pointerEvents: 'none' }}>
             {occupant.char_name} 
@@ -443,15 +444,20 @@ function App() {
   };
 
   return (
-    <div style={{ backgroundColor: '#000', color: 'white', minHeight: '100vh', padding: '15px', textAlign: 'center', fontFamily: 'Arial', userSelect: 'none' }}>
+    <div className="app-container" style={{ backgroundColor: '#000', color: 'white', minHeight: '100vh', padding: '15px', textAlign: 'center', fontFamily: 'Arial', userSelect: 'none' }}>
       <style>{`
-        .team-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; max-width: 1200px; margin: 0 auto; }
-        @media (min-width: 1024px) { .team-grid { grid-template-columns: repeat(10, 1fr); } }
+        /* --- GIAO DIỆN MOBILE / MẶC ĐỊNH (GIỮ NGUYÊN) --- */
+        .app-container { max-width: 100%; margin: 0 auto; }
+        .header-stats { display: flex; justify-content: center; gap: 5px; background: #0a0a0a; padding: 10px; borderRadius: '8px'; border: 1px solid #222; marginBottom: '15px'; flex-wrap: wrap; }
+        .team-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; max-width: 100%; margin: 0 auto; }
+        .slot-cell { height: 42px; margin: 3px 0; font-size: 10px; }
+        .leader-icon { font-size: 8px; }
         .group-select { width: 100%; background: #000; color: #fff; border: 1px solid #444; font-size: 10px; border-radius: 3px; cursor: pointer; margin-top: 5px; padding: 3px; font-weight: bold; appearance: none; text-align: center; }
         .group-select:disabled { cursor: default; border-style: dashed; color: #fff; opacity: 1; }
         .map-section { max-width: 900px; margin: 40px auto; padding: 20px; background: #0a0a0a; border-radius: 12px; border: 1px solid #333; position: relative; }
         .map-container { position: relative; width: 100%; border-radius: 8px; overflow: hidden; border: 2px solid #444; margin-top: 15px; }
         .map-bg { width: 100%; display: block; opacity: 0.8; pointer-events: none; -webkit-user-drag: none; }
+        
         .team-node { 
           position: absolute; border-radius: 50%; 
           display: flex; flex-direction: column; align-items: center; justify-content: center; 
@@ -479,12 +485,77 @@ function App() {
         .member-select-chip { padding: 6px 10px; border-radius: 4px; font-size: 11px; font-weight: bold; cursor: pointer; text-align: center; border: 1px solid rgba(255,255,255,0.1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: white; }
         .member-select-chip:hover { border-color: #fff; transform: scale(1.03); }
 
-        .waiting-box { max-width: 1200px; margin: 30px auto 10px auto; background: #0a0a0a; border: 1px solid #222; border-radius: 8px; padding: 15px; text-align: left; }
+        .waiting-box { max-width: 100%; margin: 30px auto 10px auto; background: #0a0a0a; border: 1px solid #222; border-radius: 8px; padding: 15px; text-align: left; }
         .waiting-flex-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 6px; margin-top: 10px; }
         .waiting-item-chip { display: flex; align-items: center; justify-content: space-between; height: 26px; padding: 0 6px 0 10px; border-radius: 4px; font-size: 11px; font-weight: bold; overflow: hidden; border: 1px solid rgba(255,255,255,0.1); cursor: pointer; }
         .waiting-text-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; margin-right: 4px; }
         .waiting-delete-icon-btn { background: rgba(0, 0, 0, 0.3); color: #ff4d4d; border: none; border-radius: 3px; width: 16px; height: 16px; font-size: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-weight: bold; flex-shrink: 0; transition: all 0.2s; }
         .waiting-delete-icon-btn:hover { background: #ff4d4d; color: white; }
+
+        @media (min-width: 1024px) { 
+          .team-grid { grid-template-columns: repeat(10, 1fr); } 
+        }
+
+        /* --- CẤU HÌNH PHÓNG TO / FULL TRANG TRÊN PC (ỨNG VỚI ZOOM ~175%) --- */
+        @media (min-width: 1400px) {
+          .app-container {
+            max-width: 98vw; /* Co giãn chiếm gần trọn chiều ngang trình duyệt */
+            padding: 25px !important;
+          }
+          h1 { font-size: 36px !important; margin: 20px 0 !important; }
+          
+          /* Khu vực Thống kê phía trên rộng ra và chữ to hơn */
+          .header-stats {
+            padding: 18px !important;
+            font-size: 16px !important;
+            gap: 15px !important;
+          }
+          .header-stats div div { font-size: 14px !important; }
+          .header-stats div div:last-child { font-size: 20px !important; }
+
+          /* Lưới 10 Team bung rộng, tăng khoảng cách các cột */
+          .team-grid {
+            max-width: 100% !important;
+            gap: 12px !important;
+          }
+          
+          /* Ô thành viên cao hơn, chữ to, dễ đọc đúng tỷ lệ zoom lớn */
+          .slot-cell {
+            height: 62px !important; /* Tăng từ 42px lên 62px */
+            font-size: 15px !important; /* Chữ to rõ ràng hơn hẳn */
+            margin: 5px 0 !important;
+          }
+          .leader-icon {
+            font-size: 13px !important;
+            top: 3px !important;
+            left: 4px !important;
+          }
+          .group-select {
+            font-size: 14px !important;
+            padding: 6px !important;
+            margin-top: 8px !important;
+          }
+
+          /* Danh sách chờ và Sơ đồ bản đồ chiến thuật cũng phóng lớn theo */
+          .waiting-box {
+            max-width: 100% !important;
+            padding: 25px !important;
+          }
+          .waiting-box h2 { font-size: 20px !important; }
+          .waiting-item-chip {
+            height: 38px !important;
+            font-size: 15px !important;
+          }
+          .waiting-flex-grid {
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)) !important;
+            gap: 10px !important;
+          }
+
+          .map-section {
+            max-width: 1300px !important; /* Cho phép bản đồ to hẳn ra trên PC */
+          }
+          .map-section h3 { font-size: 26px !important; }
+        }
       `}</style>
 
       <div style={{ position: 'absolute', top: '10px', right: '10px', display: 'flex', flexDirection: 'column', gap: '5px', alignItems: 'flex-end', zIndex: 100 }}>
@@ -499,7 +570,7 @@ function App() {
       <img src="/nth-logo.png" alt="Logo" style={{ width: '60px', margin: '0 auto', display: 'block' }} />
       <h1 style={{ color: 'gold', fontSize: '20px', margin: '10px 0' }}>BANG THIÊN PHẠT</h1>
 
-      <div style={{ display: 'flex', justifyContent: 'center', gap: '5px', background: '#0a0a0a', padding: '10px', borderRadius: '8px', border: '1px solid #222', marginBottom: '15px', flexWrap: 'wrap' }}>
+      <div className="header-stats">
         {Object.keys(classInfo).map(cls => (
           <div key={cls} style={{ borderRight: '1px solid #222', paddingRight: '5px', minWidth: '60px' }}>
             <div style={{ color: classInfo[cls].color, fontSize: '10px', fontWeight: 'bold' }}>{cls}</div>
