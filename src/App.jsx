@@ -583,7 +583,7 @@ function App() {
           </div>
           <div>
             <div style={{ fontSize: '10px', fontWeight: 'bold', color: '#ff5e00' }}>📦 VẬT TƯ</div>
-            <div style={{ fontSize: '14px', color: '#ffff00' }}>{totalItemsCount}</div>
+            <div style={{ fontSize: '14px', color: '#ff6600' }}>{totalItemsCount}</div>
           </div>
           <div>
             <div style={{ fontSize: '10px', fontWeight: 'bold', color: '#00ffff' }}>🔎 SCOUT</div>
