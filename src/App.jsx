@@ -19,7 +19,7 @@ const classInfo = {
 const groupSettings = {
   'Đoàn 1': { bg: 'rgba(255, 255, 255, 0.05)', border: '#7cd826', label: '#7cd826' },
   'Đoàn 2': { bg: 'rgba(0, 255, 255, 0.12)', border: '#ae14dd', label: '#00ffff' },
-  'Đoàn 3': { bg: 'rgba(255, 215, 0, 0.12)', border: '#ffd700', label: '#ffd700' },
+  'Đoàn 3': { bg: 'rgba(255, 215, 0, 0.12)', border: '#0400ff', label: '#ffd700' },
   'Đoàn 4': { bg: 'rgba(255, 69, 0, 0.15)', border: '#ff4500', label: '#ff4500' },
 };
 
