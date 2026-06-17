@@ -674,7 +674,7 @@ function App() {
           <div className="admin-map-controls">
             <button className="control-btn" style={{ background: '#7cd826', color: '#000' }} onClick={() => addNewMarker('Đoàn 1')}>+ Vòng tròn Đoàn 1</button>
             <button className="control-btn" style={{ background: '#d400ff', color: '#000' }} onClick={() => addNewMarker('Đoàn 2')}>+ Vòng tròn Đoàn 2</button>
-            <button className="control-btn" style={{ background: '#ffd700', color: '#000' }} onClick={() => addNewMarker('Đoàn 3')}>+ Vòng tròn Đoàn 3</button>
+            <button className="control-btn" style={{ background: '#5e75b4', color: '#000' }} onClick={() => addNewMarker('Đoàn 3')}>+ Vòng tròn Đoàn 3</button>
             <button className="control-btn" style={{ background: '#ff4500', color: '#fff' }} onClick={() => addNewMarker('Đoàn 4')}>+ Vòng tròn Đoàn 4</button>
             <button className="control-btn" style={{ background: '#555', color: '#fff' }} onClick={() => addNewMarker('item')}>+ Icon Vật Tư 📦</button>
             <button className="control-btn" style={{ background: '#555', color: '#fff' }} onClick={() => addNewMarker('scout')}>+ Icon Scout 🔎</button>
