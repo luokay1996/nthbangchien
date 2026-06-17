@@ -35,17 +35,6 @@ function App() {
   
   const [skillLibrary, setSkillLibrary] = useState([]);
   const [customSkillUrl, setCustomSkillUrl] = useState('');
-  const [memberSkills, setMemberSkills] = useState([]);
-
-  // Các trạng thái hỗ trợ chọn thành viên từ danh sách thay cho prompt
-  const [assigningSlot, setAssigningSlot] = useState(null); // { type, slotNum }
-  const [newCharName, setNewCharName] = useState('');
-  const [newClassName, setNewClassName] = useState('Toái Mộng');
-  const [searchUnassigned, setSearchUnassigned] = useState('');
-  
-  // Trạng thái cho khu vực nhập danh sách thô bằng text hàng loạt
-  const [bulkText, setBulkText] = useState('');
-  const [bulkClass, setBulkClass] = useState('Toái Mộng');
 
   const mapRef = useRef(null);
 
@@ -134,15 +123,10 @@ function App() {
 
   const handleResetBoard = async () => {
     if (!isAdmin) return;
-    if (window.confirm("Xóa sạch sơ đồ và vị trí tuần này? (Danh sách thành viên chờ vẫn sẽ được giữ lại)")) {
+    if (window.confirm("Xóa sạch danh sách tuần này?")) {
       await supabase.from('member_skills').delete().neq('id', 0);
       await supabase.from('team_positions').delete().neq('id', 0);
-      const { error } = await supabase.from('register_list').update({
-        team_slot: null,
-        has_item: false,
-        is_scout: false,
-        is_tower_team: false
-      }).neq('id', 0);
+      const { error } = await supabase.from('register_list').delete().neq('id', 0);
       if (!error) fetchData();
     }
   };
@@ -210,75 +194,35 @@ function App() {
       return;
     }
 
-    setAssigningSlot({ type, slotNum });
-    setNewCharName('');
-    setNewClassName('Toái Mộng');
-    setSearchUnassigned('');
-    setBulkText('');
-  };
-
-  const assignExistingMember = async (memberId) => {
-    if (!assigningSlot) return;
-    const { type, slotNum } = assigningSlot;
-    const { error } = await supabase.from('register_list').update({ type, team_slot: slotNum }).eq('id', memberId);
-    if (!error) {
-      setAssigningSlot(null);
-      fetchData();
-    }
-  };
-
-  const handleCreateAndAssign = async (e) => {
-    e.preventDefault();
-    if (!newCharName.trim() || !assigningSlot) return;
-    const { type, slotNum } = assigningSlot;
-
-    const { error } = await supabase.from('register_list').insert([{
-      char_name: newCharName.trim(),
-      class_name: newClassName,
-      team_slot: slotNum,
-      type: type
-    }]);
-    if (!error) {
-      setAssigningSlot(null);
-      fetchData();
-    }
-  };
-
-  const handleBulkInsert = async () => {
-    if (!bulkText.trim()) return;
-    
-    const names = bulkText
-      .split(/[\n,]+/)
-      .map(name => name.trim())
-      .filter(name => name.length > 0);
-
-    if (names.length === 0) return;
-
-    const existingNames = members.map(m => m.char_name.toLowerCase());
-    const newObjects = names
-      .filter(name => !existingNames.includes(name.toLowerCase()))
-      .map(name => ({
-        char_name: name,
-        class_name: bulkClass,
-        team_slot: null,
-        type: 'Chính thức'
-      }));
-
-    if (newObjects.length === 0) {
-      alert("Tất cả các tên bạn nhập đều đã tồn tại trong danh sách!");
+    const nameInput = prompt(`Admin điền tên thành viên cho ô S${slotNum}:`);
+    if (!nameInput) return;
+    const classInput = prompt(`Nhập phái (${Object.keys(classInfo).join(', ')}):`, 'Toái Mộng');
+    if (!Object.keys(classInfo).includes(classInput)) {
+      alert("Sai tên hệ phái! Vui lòng nhập đúng chuẩn.");
       return;
     }
 
-    const { error } = await supabase.from('register_list').insert(newObjects);
-    if (!error) {
-      alert(`Đã thêm thành công ${newObjects.length} thành viên vào danh sách chờ!`);
-      setBulkText('');
-      fetchData();
-    } else {
-      alert("Có lỗi xảy ra khi đồng bộ database!");
+    const { error } = await supabase.from('register_list').insert([{
+      char_name: nameInput,
+      class_name: classInput,
+      team_slot: slotNum,
+      type: type
+    }]);
+    if (!error) fetchData();
+  };
+
+  // Hàm xóa nhanh một thành viên ngoài danh sách chờ dành riêng cho Admin
+  const handleQuickDeleteWaiting = async (e, id, name) => {
+    e.stopPropagation(); // Ngăn sự kiện click lan ra ngoài
+    if (!isAdmin) return;
+    if (window.confirm(`Xác nhận xóa hẳn [${name}] khỏi danh sách chờ?`)) {
+      await supabase.from('member_skills').delete().eq('member_id', id);
+      const { error } = await supabase.from('register_list').delete().eq('id', id);
+      if (!error) fetchData();
     }
   };
 
+  const [memberSkills, setMemberSkills] = useState([]);
   const addSkillToMember = async (url) => {
     if (!isAdmin || !selectedMember || !url) return;
 
@@ -346,7 +290,7 @@ function App() {
 
   const deleteMember = async () => {
     if (!isAdmin || !selectedMember) return;
-    if (window.confirm(`Xác nhận xóa hẳn [${selectedMember.char_name}] khỏi hệ thống?`)) {
+    if (window.confirm(`Xác nhận xóa [${selectedMember.char_name}]?`)) {
       await supabase.from('member_skills').delete().eq('member_id', selectedMember.id);
       const { error } = await supabase.from('register_list').delete().eq('id', selectedMember.id);
       if (!error) {
@@ -374,6 +318,7 @@ function App() {
   const totalScoutsCount = members.filter(m => m.char_name && m.is_scout).length;
   const totalTowersCount = members.filter(m => m.char_name && m.is_tower_team).length;
 
+  // Lọc ra danh sách thành viên chưa được gán vào bất kỳ ô (slot) nào trên bảng chính thức/dự bị
   const unassignedMembers = members.filter(m => !m.team_slot && m.char_name);
 
   const renderSlotCell = (type, slotNum) => {
@@ -386,7 +331,7 @@ function App() {
         style={{
           height: '42px', margin: '3px 0', borderRadius: '4px', position: 'relative',
           backgroundColor: occupant ? classInfo[occupant.class_name]?.color : '#111',
-          border: isBeingMoved ? '2px solid white' : (assigningSlot && assigningSlot.type === type && assigningSlot.slotNum === slotNum) ? '2px solid gold' : '1px solid #333',
+          border: isBeingMoved ? '2px solid white' : '1px solid #333',
           display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: isAdmin ? 'pointer' : 'default',
           fontSize: '10px', color: occupant?.class_name === 'Long Ngâm' ? '#000' : 'white', fontWeight: 'bold',
           padding: '0 4px', overflow: 'hidden', opacity: isBeingMoved ? 0.5 : 1,
@@ -436,12 +381,17 @@ function App() {
         .skill-lib-item:hover { border-color: gold; transform: scale(1.1); }
         .lib-remove-btn { position: absolute; top: -5px; right: -5px; background: black; color: red; border: 1px solid red; border-radius: 50%; width: 16px; height: 16px; font-size: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 5; }
         .custom-add-skill { display: flex; gap: 5px; margin-top: 10px; padding: 0 10px; }
-        .custom-input { flex: 1; background: #000; border: 1px solid #444; color: white; padding: 6px; border-radius: 4px; }
-        .upload-btn { background: #333; color: white; border: 1px solid #555; padding: 6px 10px; border-radius: 4px; cursor: pointer; font-weight: bold; }
-        .add-btn { background: #d4af37; color: black; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        .custom-input { flex: 1; background: #000; border: 1px solid #444; color: white; padding: 6px; border-radius: 4px; fontSize: 11px; }
+        .upload-btn { background: #333; color: white; border: 1px solid #555; padding: 6px 10px; border-radius: 4px; cursor: pointer; fontSize: 11px; font-weight: bold; }
+        .add-btn { background: #d4af37; color: black; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; fontSize: 11px; font-weight: bold; }
         
-        .member-select-chip { padding: 6px 10px; border-radius: 4px; font-size: 11px; font-weight: bold; cursor: pointer; text-align: center; border: 1px solid rgba(255,255,255,0.1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: white; }
-        .member-select-chip:hover { border-color: #fff; transform: scale(1.03); }
+        /* CSS cho phần danh sách thành viên chờ bên ngoài */
+        .waiting-list-container { max-width: 1200px; margin: 30px auto 10px auto; background: #0a0a0a; border: 1px solid #222; border-radius: 8px; padding: 15px; text-align: left; }
+        .waiting-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 6px; margin-top: 10px; }
+        .waiting-chip { display: flex; align-items: center; justify-content: space-between; height: 26px; padding: 0 6px 0 10px; border-radius: 4px; font-size: 11px; font-weight: bold; overflow: hidden; border: 1px solid rgba(0,0,0,0.2); }
+        .waiting-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; margin-right: 4px; }
+        .waiting-del-btn { background: rgba(0, 0, 0, 0.4); color: #ff4d4d; border: none; border-radius: 3px; width: 16px; height: 16px; font-size: 9px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-weight: bold; flex-shrink: 0; transition: all 0.2s; }
+        .waiting-del-btn:hover { background: #ff4d4d; color: #fff; }
       `}</style>
 
       <div style={{ position: 'absolute', top: '10px', right: '10px', display: 'flex', flexDirection: 'column', gap: '5px', alignItems: 'flex-end', zIndex: 100 }}>
@@ -516,6 +466,42 @@ function App() {
         {[...Array(30)].map((_, i) => renderSlotCell('Học việc', i + 1))}
       </div>
 
+      {/* --- KHU VỰC THÀNH VIÊN ĐANG CHỜ XẾP VÀO SƠ ĐỒ --- */}
+      <div className="waiting-list-container">
+        <h2 style={{ color: 'gold', fontSize: '14px', margin: '0 0 5px 0', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <span>📋 THÀNH VIÊN CHỜ XẾP ĐỘI ({unassignedMembers.length})</span>
+          <span style={{ fontSize: '11px', color: '#666', fontWeight: 'normal' }}>(Chưa được đưa vào bảng sơ đồ)</span>
+        </h2>
+        
+        <div className="waiting-grid">
+          {unassignedMembers.map(m => (
+            <div key={m.id} className="waiting-chip" style={{ 
+              backgroundColor: classInfo[m.class_name]?.color || '#222', 
+              color: m.class_name === 'Long Ngâm' ? '#000' : 'white' 
+            }}>
+              <span className="waiting-name" title={`${m.char_name} (${m.class_name})`}>
+                {m.char_name}
+              </span>
+              {isAdmin && (
+                <button 
+                  className="waiting-del-btn" 
+                  title="Xóa khỏi danh sách chờ"
+                  onClick={(e) => handleQuickDeleteWaiting(e, m.id, m.char_name)}
+                >
+                  ×
+                </button>
+              )}
+            </div>
+          ))}
+          {unassignedMembers.length === 0 && (
+            <div style={{ color: '#444', fontSize: '11px', gridColumn: '1 / -1', padding: '10px 0' }}>
+              Hiện không có thành viên nào ở danh sách chờ...
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* --- BẢN ĐỒ CHỈ HUY CHIẾN THUẬT RÚT GỌN --- */}
       <div className="map-section">
         <h3 style={{ color: 'gold', margin: '0 0 5px 0', fontSize: '18px' }}>CHỈ ĐẠO CHIẾN THUẬT</h3>
         
@@ -570,71 +556,7 @@ function App() {
         </div>
       </div>
 
-      {/* MODAL GIAO DIỆN CHỌN NHANH & NẠP VĂN BẢN HÀNG LOẠT */}
-      {assigningSlot && isAdmin && (
-        <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', background: '#141414', padding: '20px', borderRadius: '12px', border: '2px solid gold', zIndex: 1100, width: '90%', maxWidth: '520px', boxShadow: '0 0 40px rgba(0,0,0,0.9)', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
-          <div style={{ fontSize: '15px', fontWeight: 'bold', color: 'gold', marginBottom: '12px' }}>
-            XẾP THÀNH VIÊN VÀO Ô [S{assigningSlot.slotNum} - {assigningSlot.type}]
-          </div>
-
-          {/* KHO THÀNH VIÊN CHỜ & THANH TÌM KIẾM NHANH */}
-          <div style={{ display: 'flex', flexDirection: 'column', height: '180px', marginBottom: '12px', background: '#0a0a0a', padding: '10px', borderRadius: '8px', border: '1px solid #222', overflow: 'hidden' }}>
-            <div style={{ fontSize: '11px', color: '#888', textAlign: 'left', marginBottom: '6px', fontWeight: 'bold' }}>
-              BẤM VÀO TÊN ĐỂ ĐƯA VÀO ĐỘI (DANH SÁCH CHỜ):
-            </div>
-            <input className="custom-input" style={{ marginBottom: '8px', flex: 'none', fontSize: '11px' }} placeholder="Tìm nhanh tên thành viên..." value={searchUnassigned} onChange={(e) => setSearchUnassigned(e.target.value)} />
-            
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', overflowY: 'auto', flex: 1, padding: '2px' }}>
-              {unassignedMembers
-                .filter(m => m.char_name.toLowerCase().includes(searchUnassigned.toLowerCase()))
-                .map(m => (
-                  <div key={m.id} className="member-select-chip" style={{ backgroundColor: classInfo[m.class_name]?.color, color: m.class_name === 'Long Ngâm' ? '#000' : '#fff' }} onClick={() => assignExistingMember(m.id)}>
-                    {m.char_name}
-                  </div>
-                ))}
-              {unassignedMembers.filter(m => m.char_name.toLowerCase().includes(searchUnassigned.toLowerCase())).length === 0 && (
-                <div style={{ gridColumn: 'span 3', color: '#555', fontSize: '11px', padding: '15px 0' }}>Không tìm thấy thành viên trống...</div>
-              )}
-            </div>
-          </div>
-
-          {/* KHU VỰC THÊM TEXT HÀNG LOẠT ĐỂ UPDATE VÀO KHO DỰ TRỮ (KHÔNG BỊ MẤT KHI RESET) */}
-          <div style={{ borderTop: '1px solid #222', paddingTop: '10px', marginBottom: '12px', textAlign: 'left' }}>
-            <div style={{ fontSize: '11px', color: 'gold', marginBottom: '5px', fontWeight: 'bold' }}>PASTE DANH SÁCH TEXT HÀNG LOẠT VÀO KHO CHỜ:</div>
-            <textarea 
-              style={{ width: '100%', height: '55px', background: '#000', border: '1px solid #444', borderRadius: '4px', color: '#fff', padding: '5px', fontSize: '11px', resize: 'none', fontFamily: 'monospace' }}
-              placeholder="Dán danh sách tên từ Excel/Word vào đây... (Ngăn cách bằng dấu phẩy hoặc Xuống dòng)"
-              value={bulkText}
-              onChange={(e) => setBulkText(e.target.value)}
-            />
-            <div style={{ display: 'flex', gap: '6px', marginTop: '5px', alignItems: 'center' }}>
-              <span style={{ fontSize: '10px', color: '#aaa' }}>Gán phái tạm thời:</span>
-              <select className="custom-input" style={{ maxWidth: '110px', padding: '3px', fontSize: '11px', height: '26px' }} value={bulkClass} onChange={(e) => setBulkClass(e.target.value)}>
-                {Object.keys(classInfo).map(cls => <option key={cls} value={cls}>{cls}</option>)}
-              </select>
-              <button type="button" onClick={handleBulkInsert} style={{ background: '#28a745', color: '#fff', border: 'none', borderRadius: '4px', padding: '4px 12px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', height: '26px', marginLeft: 'auto' }}>
-                NẠP VÀO KHO CHỜ
-              </button>
-            </div>
-          </div>
-
-          {/* FORM TẠO ĐƠN LẺ */}
-          <form onSubmit={handleCreateAndAssign} style={{ borderTop: '1px solid #222', paddingTop: '10px', textAlign: 'left' }}>
-            <div style={{ fontSize: '11px', color: '#888', marginBottom: '5px', fontWeight: 'bold' }}>HOẶC TẠO MỚI 1 NGƯỜI TRỰC TIẾP VÀO Ô:</div>
-            <div style={{ display: 'flex', gap: '6px' }}>
-              <input className="custom-input" style={{ fontSize: '11px', padding: '5px' }} required placeholder="Nhập tên..." value={newCharName} onChange={(e) => setNewCharName(e.target.value)} />
-              <select className="custom-input" style={{ maxWidth: '110px', cursor: 'pointer', fontSize: '11px' }} value={newClassName} onChange={(e) => setNewClassName(e.target.value)}>
-                {Object.keys(classInfo).map(cls => <option key={cls} value={cls}>{cls}</option>)}
-              </select>
-              <button type="submit" className="add-btn" style={{ fontSize: '11px', padding: '5px 12px' }}>THÊM MỚI</button>
-            </div>
-          </form>
-
-          <button type="button" onClick={() => setAssigningSlot(null)} style={{ background: '#333', color: 'white', border: 'none', padding: '8px', borderRadius: '6px', fontWeight: 'bold', marginTop: '12px', width: '100%', cursor: 'pointer', fontSize: '12px' }}>ĐÓNG GIAO DIỆN</button>
-        </div>
-      )}
-
-      {/* MODAL ĐIỀU CHỈNH CHỨC NĂNG THÀNH VIÊN */}
+      {/* MODAL ĐIỀU CHỈNH CHỨC NĂNG - CHỈ HIỂN THỊ KHI ĐANG Ở QUYỀN ADMIN */}
       {selectedMember && isAdmin && (
         <div style={{ position: 'fixed', bottom: '20px', left: '50%', transform: 'translateX(-50%)', background: '#1a1a1a', padding: '20px', borderRadius: '15px', border: '2px solid gold', zIndex: 1000, width: '90%', maxWidth: '420px', boxShadow: '0 0 30px rgba(0,0,0,1)' }}>
           <div style={{ marginBottom: '5px', fontWeight: 'bold', color: classInfo[selectedMember.class_name]?.color, fontSize: '18px' }}>{selectedMember.char_name}</div>
@@ -655,9 +577,9 @@ function App() {
             <div style={{ marginTop: '10px', borderTop: '1px solid #333', paddingTop: '10px' }}>
               <div style={{ fontSize: '9px', color: '#888', marginBottom: '5px' }}>THÊM SKILL MỚI VÀO KHO</div>
               <div className="custom-add-skill">
-                <input className="custom-input" style={{ fontSize: '11px' }} placeholder="Link ảnh skill..." value={customSkillUrl} onChange={(e) => setCustomSkillUrl(e.target.value)} />
-                <button type="button" className="add-btn" style={{ fontSize: '11px' }} onClick={() => addToLibrary(customSkillUrl)}>THÊM</button>
-                <label className="upload-btn" style={{ fontSize: '11px' }}>
+                <input className="custom-input" placeholder="Link ảnh skill..." value={customSkillUrl} onChange={(e) => setCustomSkillUrl(e.target.value)} />
+                <button className="add-btn" onClick={() => addToLibrary(customSkillUrl)}>THÊM</button>
+                <label className="upload-btn">
                   TẢI ẢNH
                   <input type="file" accept="image/*" hidden onChange={handleFileChange} />
                 </label>
@@ -682,20 +604,20 @@ function App() {
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', marginBottom: '10px' }}>
-            <button type="button" onClick={toggleScout} style={{ background: selectedMember.is_scout ? '#00ffff' : '#333', color: selectedMember.is_scout ? '#000' : '#fff', border: 'none', padding: '8px', borderRadius: '6px', fontWeight: 'bold', fontSize: '11px' }}>
+            <button onClick={toggleScout} style={{ background: selectedMember.is_scout ? '#00ffff' : '#333', color: selectedMember.is_scout ? '#000' : '#fff', border: 'none', padding: '8px', borderRadius: '6px', fontWeight: 'bold', fontSize: '11px' }}>
               {selectedMember.is_scout ? "BỎ SCOUT 🔎" : "SCOUT 🔎"}
             </button>
-            <button type="button" onClick={toggleTowerTeam} style={{ background: selectedMember.is_tower_team ? '#ff4500' : '#fff', color: selectedMember.is_tower_team ? '#fff' : '#000', border: 'none', padding: '8px', borderRadius: '6px', fontWeight: 'bold', fontSize: '11px' }}>
+            <button onClick={toggleTowerTeam} style={{ background: selectedMember.is_tower_team ? '#ff4500' : '#fff', color: selectedMember.is_tower_team ? '#fff' : '#000', border: 'none', padding: '8px', borderRadius: '6px', fontWeight: 'bold', fontSize: '11px' }}>
               {selectedMember.is_tower_team ? "BỎ TEAM TRỤ 🔨" : "TEAM TRỤ 🔨"}
             </button>
           </div>
 
           <div style={{ display: 'flex', gap: '10px' }}>
-            <button type="button" onClick={toggleItem} style={{ flex: 1, background: selectedMember.has_item ? '#444' : '#28a745', color: 'white', border: 'none', padding: '10px', borderRadius: '6px', fontWeight: 'bold' }}>
+            <button onClick={toggleItem} style={{ flex: 1, background: selectedMember.has_item ? '#444' : '#28a745', color: 'white', border: 'none', padding: '10px', borderRadius: '6px', fontWeight: 'bold' }}>
                 {selectedMember.has_item ? "BỎ VẬT TƯ" : "VẬT TƯ 📦"}
             </button>
-            <button type="button" onClick={deleteMember} style={{ background: '#dc3545', color: 'white', border: 'none', padding: '10px', borderRadius: '6px', fontWeight: 'bold' }}>XÓA HẲN</button>
-            <button type="button" onClick={() => setSelectedMember(null)} style={{ background: '#333', color: 'white', border: 'none', padding: '10px', borderRadius: '6px', fontWeight: 'bold', minWidth: '80px' }}>ĐÓNG</button>
+            <button onClick={deleteMember} style={{ background: '#dc3545', color: 'white', border: 'none', padding: '10px', borderRadius: '6px', fontWeight: 'bold' }}>XÓA HẲN</button>
+            <button onClick={() => setSelectedMember(null)} style={{ background: '#333', color: 'white', border: 'none', padding: '10px', borderRadius: '6px', fontWeight: 'bold', minWidth: '80px' }}>ĐÓNG</button>
           </div>
         </div>
       )}
