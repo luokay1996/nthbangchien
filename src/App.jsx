@@ -567,7 +567,7 @@ function App() {
       </div>
 
       <img src="/nth-logo.png" alt="Logo" style={{ width: '60px', margin: '0 auto', display: 'block' }} />
-      <h1 style={{ color: 'gold', fontSize: '20px', margin: '10px 0' }}>BANG THIÊN PHẠT</h1>
+      <h1 style={{ color: 'gold', fontSize: '20px', margin: '10px 0' }}>♅ BANG THIÊN PHẠT ♅</h1>
 
       <div className="header-stats">
         {Object.keys(classInfo).map(cls => (
