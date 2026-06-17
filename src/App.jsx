@@ -571,11 +571,14 @@ function App() {
 
       <div className="header-stats">
         {Object.keys(classInfo).map(cls => (
-          <div key={cls} style={{ borderRight: '1px solid #222', paddingRight: '5px', minWidth: '60px' }}>
-            <div style={{ color: classInfo[cls].color, fontSize: '10px', fontWeight: 'bold' }}>{cls}</div>
-            <div style={{ fontSize: '14px' }}>{members.filter(m => m.class_name === cls).length}</div>
-          </div>
-        ))}
+  <div key={cls} style={{ borderRight: '1px solid #222', paddingRight: '5px', minWidth: '60px' }}>
+    <div style={{ color: classInfo[cls].color, fontSize: '10px', fontWeight: 'bold' }}>{cls}</div>
+    {/* Chỉ đếm thành viên có hệ phái tương ứng VÀ đã được xếp vào một ô (team_slot khác null) */}
+    <div style={{ fontSize: '14px' }}>
+      {members.filter(m => m.class_name === cls && m.team_slot).length}
+    </div>
+  </div>
+))}
         <div style={{ paddingLeft: '8px', borderLeft: '2px solid #333', display: 'flex', gap: '15px' }}>
           <div>
             <div style={{ fontSize: '10px', fontWeight: 'bold', color: '#00FF00' }}>QUÂN SỐ</div>
