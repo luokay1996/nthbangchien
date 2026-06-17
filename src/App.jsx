@@ -43,7 +43,7 @@ function App() {
   const [newClassName, setNewClassName] = useState('Toái Mộng');
   const [searchUnassigned, setSearchUnassigned] = useState('');
   
-  // Trạng thái cho khu vực nhập danh sách thô bằng text hành loạt
+  // Trạng thái cho khu vực nhập danh sách thô bằng text hàng loạt
   const [bulkText, setBulkText] = useState('');
   const [bulkClass, setBulkClass] = useState('Toái Mộng');
 
@@ -132,7 +132,6 @@ function App() {
     }
   };
 
-  // Cải tiến hàm Reset tuần: Chỉ gỡ vị trí và skill chứ không xóa dữ liệu danh sách thành viên gốc (Reset không mất danh sách chờ)
   const handleResetBoard = async () => {
     if (!isAdmin) return;
     if (window.confirm("Xóa sạch sơ đồ và vị trí tuần này? (Danh sách thành viên chờ vẫn sẽ được giữ lại)")) {
@@ -245,11 +244,9 @@ function App() {
     }
   };
 
-  // Hàm xử lý nạp danh sách thô hành loạt từ Admin (Phân tách bằng dấu phẩy hoặc dòng mới)
   const handleBulkInsert = async () => {
     if (!bulkText.trim()) return;
     
-    // Tách chuỗi văn bản dựa trên dấu phẩy hoặc xuống dòng
     const names = bulkText
       .split(/[\n,]+/)
       .map(name => name.trim())
@@ -257,7 +254,6 @@ function App() {
 
     if (names.length === 0) return;
 
-    // Lọc bỏ trùng lặp với database hiện tại để tránh lỗi dữ liệu trùng
     const existingNames = members.map(m => m.char_name.toLowerCase());
     const newObjects = names
       .filter(name => !existingNames.includes(name.toLowerCase()))
@@ -669,7 +665,7 @@ function App() {
             </div>
           </div>
 
-          <div style={{ display: 'flex', justify-content: 'center', gap: '8px', marginBottom: '20px', background: 'rgba(0,0,0,0.4)', padding: '10px', borderRadius: '8px' }}>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginBottom: '20px', background: 'rgba(0,0,0,0.4)', padding: '10px', borderRadius: '8px' }}>
             {[0, 1, 2, 3, 4].map(i => {
               const skill = memberSkills.find(s => s.member_id === selectedMember.id && parseInt(s.pos_x) === i);
               return (
