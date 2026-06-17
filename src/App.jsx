@@ -17,10 +17,10 @@ const classInfo = {
 };
 
 const groupSettings = {
-  'Nhóm 1': { bg: 'rgba(255, 255, 255, 0.05)', border: '#7cd826', label: '#7cd826' },
-  'Nhóm 2': { bg: 'rgba(0, 255, 255, 0.12)', border: '#00ffff', label: '#00ffff' },
-  'Nhóm 3': { bg: 'rgba(255, 215, 0, 0.12)', border: '#ffd700', label: '#ffd700' },
-  'Nhóm 4': { bg: 'rgba(255, 69, 0, 0.15)', border: '#ff4500', label: '#ff4500' },
+  'Đoàn 1': { bg: 'rgba(255, 255, 255, 0.05)', border: '#7cd826', label: '#7cd826' },
+  'Đoàn 2': { bg: 'rgba(0, 255, 255, 0.12)', border: '#00ffff', label: '#00ffff' },
+  'Đoàn 3': { bg: 'rgba(255, 215, 0, 0.12)', border: '#ffd700', label: '#ffd700' },
+  'Đoàn 4': { bg: 'rgba(255, 69, 0, 0.15)', border: '#ff4500', label: '#ff4500' },
 };
 
 function App() {
@@ -32,7 +32,7 @@ function App() {
   const [selectedMember, setSelectedMember] = useState(null);
   const [form, setForm] = useState({ char_name: '', class_name: 'Toái Mộng', team_slot: null, type: 'Chính thức' });
   const [teamGroups, setTeamGroups] = useState({});
-  const [teamPositions, setTeamPositions] = useState([]); // Chuyển thành Mảng để chứa số lượng icon thoải mái
+  const [teamPositions, setTeamPositions] = useState([]); // Quản lý danh sách các node tự do trên bản đồ
   
   // --- STATE CHO KHO SKILL ĐỘNG ---
   const [skillLibrary, setSkillLibrary] = useState([]);
@@ -51,7 +51,14 @@ function App() {
     if (skills) setMemberSkills(skills); 
     if (lib) setSkillLibrary(lib);
     if (groups) {
-      const groupMap = Object.fromEntries(groups.map(g => [g.team_id, g.group_name]));
+      // Đổi tên Nhóm thành Đoàn khi đọc từ database lên để tương thích dữ liệu cũ nếu có
+      const groupMap = Object.fromEntries(groups.map(g => {
+        let name = g.group_name || 'Đoàn 1';
+        if (name.startsWith('Nhóm')) {
+          name = name.replace('Nhóm', 'Đoàn');
+        }
+        return [g.team_id, name];
+      }));
       setTeamGroups(groupMap);
     }
     if (positions) {
@@ -304,12 +311,22 @@ function App() {
     }
   };
 
-  // Logic đếm số lượng người thực tế trong Team sau khi trừ đi các chức năng đặc biệt
-  const getTeamPureCount = (teamNum) => {
-    const teamMems = members.filter(m => m.type === 'Chính thức' && m.team_slot >= (teamNum - 1) * 6 + 1 && m.team_slot <= teamNum * 6);
-    // Trừ đi người có Vật tư, Scout, hoặc thuộc Team Trụ
-    const pureMems = teamMems.filter(m => !m.has_item && !m.is_scout && !m.is_tower_team && m.char_name);
-    return pureMems.length;
+  // --- LOGIC ĐẾM QUÂN SỐ THỰC TẾ CỦA ĐOÀN ĐÃ TRỪ CHỨC NĂNG VÀ THEO SỐ TEAM GỘP ---
+  const getGroupPureCount = (groupName) => {
+    // Tìm xem những Team nào đang được gán vào Đoàn này
+    const activeTeamIds = Object.keys(teamGroups).filter(teamId => teamGroups[teamId] === groupName).map(Number);
+    if (activeTeamIds.length === 0) return 0;
+
+    let totalPure = 0;
+    activeTeamIds.forEach(teamId => {
+      // Lấy toàn bộ danh sách trong slot của team này
+      const teamMems = members.filter(m => m.type === 'Chính thức' && m.team_slot >= (teamId - 1) * 6 + 1 && m.team_slot <= teamId * 6);
+      // Chỉ tính những người đã điền tên và KHÔNG có bất kỳ chức năng đặc biệt nào (Vật tư, Scout, Trụ)
+      const pureMems = teamMems.filter(m => m.char_name && !m.has_item && !m.is_scout && !m.is_tower_team);
+      totalPure += pureMems.length;
+    });
+
+    return totalPure;
   };
 
   // Đếm tổng số lượng chức năng trên toàn bộ danh sách để phục vụ hiển thị
@@ -359,7 +376,7 @@ function App() {
         .map-container { position: relative; width: 100%; border-radius: 8px; overflow: hidden; border: 2px solid #444; margin-top: 15px; }
         .map-bg { width: 100%; display: block; opacity: 0.8; pointer-events: none; -webkit-user-drag: none; }
         .team-node { 
-          position: absolute; width: 36px; height: 36px; border-radius: 50%; 
+          position: absolute; border-radius: 6px; 
           display: flex; flex-direction: column; align-items: center; justify-content: center; 
           font-size: 11px; font-weight: bold; color: #000; cursor: move; 
           transform: translate(-50%, -50%); border: 2px solid #fff; 
@@ -369,7 +386,7 @@ function App() {
         }
         .team-node:active { transform: translate(-50%, -50%) scale(1.2); z-index: 100; }
         .marker-remove-btn { position: absolute; top: -6px; right: -6px; background: red; color: white; border: none; border-radius: 50%; width: 14px; height: 14px; font-size: 9px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-weight: bold; }
-        .admin-map-controls { display: flex; gap: 10px; justify-content: center; margin-bottom: 15px; }
+        .admin-map-controls { display: flex; gap: 10px; justify-content: center; margin-bottom: 15px; flex-wrap: wrap; }
         .control-btn { padding: 6px 12px; font-size: 11px; font-weight: bold; border-radius: 4px; cursor: pointer; border: 1px solid #444; color: white; }
         .skill-box { width: 65px; height: 65px; background: #222; border: 1px solid #444; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #555; position: relative; overflow: visible; }
         .skill-lib-item-container { position: relative; }
@@ -439,12 +456,12 @@ function App() {
       <div className="team-grid">
         {[...Array(10)].map((_, col) => {
           const teamNum = col + 1;
-          const currentGroup = teamGroups[teamNum] || 'Nhóm 1';
-          const settings = groupSettings[currentGroup];
+          const currentGroup = teamGroups[teamNum] || 'Đoàn 1';
+          const settings = groupSettings[currentGroup] || groupSettings['Đoàn 1'];
           return (
             <div key={col} style={{ 
               background: settings.bg, padding: '8px', borderRadius: '8px', border: `2px solid ${settings.border}`,
-              boxShadow: currentGroup !== 'Nhóm 1' ? `0 0 10px ${settings.border}33` : 'none'
+              boxShadow: currentGroup !== 'Đoàn 1' ? `0 0 10px ${settings.border}33` : 'none'
             }}>
               <div style={{ marginBottom: '6px' }}>
                 <span style={{ color: settings.label, fontSize: '11px', fontWeight: 'bold' }}>TEAM {teamNum}</span>
@@ -463,41 +480,49 @@ function App() {
         {[...Array(30)].map((_, i) => renderSlotCell('Học việc', i + 1))}
       </div>
 
-      {/* --- PHẦN BẢN ĐỒ TƯƠNG TÁC ĐÃ ĐƯỢC NÂNG CẤP HOÀN TOÀN --- */}
+      {/* --- BẢN ĐỒ CHỈ HUY CHIẾN THUẬT THEO ĐOÀN --- */}
       <div className="map-section">
         <h3 style={{ color: 'gold', margin: '0 0 5px 0', fontSize: '18px' }}>CHỈ ĐẠO CHIẾN THUẬT</h3>
         
         {isAdmin && (
           <div className="admin-map-controls">
-            <button className="control-btn" style={{ background: '#7cd826', color: '#000' }} onClick={() => addNewMarker('team')}>+ Thêm Node Team</button>
-            <button className="control-btn" style={{ background: '#ffd700', color: '#000' }} onClick={() => addNewMarker('item')}>+ Thêm Icon Vật Tư 📦</button>
-            <button className="control-btn" style={{ background: '#00ffff', color: '#000' }} onClick={() => addNewMarker('scout')}>+ Thêm Icon Scout 🔎</button>
-            <button className="control-btn" style={{ background: '#ff4500', color: '#fff' }} onClick={() => addNewMarker('tower')}>+ Thêm Icon Trụ 🔨</button>
+            <button className="control-btn" style={{ background: '#7cd826', color: '#000' }} onClick={() => addNewMarker('Đoàn 1')}>+ Thêm Node Đoàn 1</button>
+            <button className="control-btn" style={{ background: '#00ffff', color: '#000' }} onClick={() => addNewMarker('Đoàn 2')}>+ Thêm Node Đoàn 2</button>
+            <button className="control-btn" style={{ background: '#ffd700', color: '#000' }} onClick={() => addNewMarker('Đoàn 3')}>+ Thêm Node Đoàn 3</button>
+            <button className="control-btn" style={{ background: '#ff4500', color: '#fff' }} onClick={() => addNewMarker('Đoàn 4')}>+ Thêm Node Đoàn 4</button>
+            <button className="control-btn" style={{ background: '#555', color: '#fff' }} onClick={() => addNewMarker('item')}>+ Thêm Icon Vật Tư 📦</button>
+            <button className="control-btn" style={{ background: '#555', color: '#fff' }} onClick={() => addNewMarker('scout')}>+ Thêm Icon Scout 🔎</button>
+            <button className="control-btn" style={{ background: '#555', color: '#fff' }} onClick={() => addNewMarker('tower')}>+ Thêm Icon Trụ 🔨</button>
           </div>
         )}
 
         <div className="map-container" ref={mapRef}>
           <img src="https://i.postimg.cc/SsMMSZLG/unnam2ed.jpg" alt="Tactical Map" className="map-bg" />
           
-          {teamPositions.map((pos, index) => {
+          {teamPositions.map((pos) => {
             let bg = '#fff';
             let label = '';
+            let isRound = false;
             
-            // Xác định giao diện dựa trên loại marker_type
-            if (pos.marker_type.startsWith('team')) {
-              bg = '#7cd826';
-              // Đếm số lượng thành viên thực tế của Team này (Ví dụ Node Team đầu tiên ứng với Team 1, tiếp theo Team 2...)
-              const calculatedTeamNum = (teamPositions.filter((p, i) => p.marker_type === 'team' && i < index).length) + 1;
-              label = `T${calculatedTeamNum > 10 ? calculatedTeamNum : calculatedTeamNum} (${getTeamPureCount(calculatedTeamNum)})`;
+            if (pos.marker_type.startsWith('Đoàn')) {
+              const currentGroup = pos.marker_type;
+              bg = groupSettings[currentGroup]?.border || '#fff';
+              // Gọi hàm đếm số lượng người thực tế của Đoàn đã trừ chức năng đặc biệt
+              const pureCount = getGroupPureCount(currentGroup);
+              label = `${currentGroup} (${pureCount})`;
+              isRound = false; // Hình hộp chữ nhật bo góc cho Node Đoàn
             } else if (pos.marker_type === 'item') {
               bg = '#ffd700';
               label = '📦';
+              isRound = true;
             } else if (pos.marker_type === 'scout') {
               bg = '#00ffff';
               label = '🔎';
+              isRound = true;
             } else if (pos.marker_type === 'tower') {
               bg = '#ff4500';
               label = '🔨';
+              isRound = true;
             }
 
             return (
@@ -505,10 +530,13 @@ function App() {
                 style={{ 
                   left: `${pos.pos_x}%`, top: `${pos.pos_y}%`, 
                   backgroundColor: bg,
-                  width: pos.marker_type.startsWith('team') ? '52px' : '34px',
-                  height: pos.marker_type.startsWith('team') ? '34px' : '34px',
-                  borderRadius: pos.marker_type.startsWith('team') ? '6px' : '50%',
-                  fontSize: '10px',
+                  padding: isRound ? '0' : '6px 10px',
+                  width: isRound ? '34px' : 'auto',
+                  height: '34px',
+                  borderRadius: isRound ? '50%' : '6px',
+                  fontSize: '11px',
+                  whiteSpace: 'nowrap',
+                  color: (pos.marker_type === 'Đoàn 1' || pos.marker_type === 'scout') ? '#000' : '#fff',
                   cursor: isAdmin ? 'move' : 'default'
                 }}
               >
@@ -582,7 +610,7 @@ function App() {
                 <button onClick={toggleScout} style={{ background: selectedMember.is_scout ? '#00ffff' : '#333', color: selectedMember.is_scout ? '#000' : '#fff', border: 'none', padding: '8px', borderRadius: '6px', fontWeight: 'bold', fontSize: '11px' }}>
                   {selectedMember.is_scout ? "BỎ SCOUT 🔎" : "SCOUT 🔎"}
                 </button>
-                <button onClick={toggleTowerTeam} style={{ background: selectedMember.is_tower_team ? '#ff4500' : '#333', color: '#white', border: 'none', padding: '8px', borderRadius: '6px', fontWeight: 'bold', fontSize: '11px' }}>
+                <button onClick={toggleTowerTeam} style={{ background: selectedMember.is_tower_team ? '#ff4500' : '#fff', color: selectedMember.is_tower_team ? '#fff' : '#000', border: 'none', padding: '8px', borderRadius: '6px', fontWeight: 'bold', fontSize: '11px' }}>
                   {selectedMember.is_tower_team ? "BỎ TEAM TRỤ 🔨" : "TEAM TRỤ 🔨"}
                 </button>
               </>
