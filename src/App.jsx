@@ -582,7 +582,7 @@ function App() {
             <div style={{ fontSize: '14px', color: '#00FF00' }}>{officialCount} / 60</div>
           </div>
           <div>
-            <div style={{ fontSize: '10px', fontWeight: 'bold', color: '#ffff00' }}>📦 VẬT TƯ</div>
+            <div style={{ fontSize: '10px', fontWeight: 'bold', color: '#ff5e00' }}>📦 VẬT TƯ</div>
             <div style={{ fontSize: '14px', color: '#ffff00' }}>{totalItemsCount}</div>
           </div>
           <div>
