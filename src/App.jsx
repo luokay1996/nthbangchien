@@ -99,7 +99,7 @@ function App() {
 
   const handleAdminLogin = () => {
     const pass = prompt("Nhập mật mã Admin:");
-    if (pass === "minhnguyetcung2026") { 
+    if (pass === "tp2026-dd") { 
       setIsAdmin(true); 
       alert("ĐÃ KÍCH HOẠT QUYỀN ADMIN!"); 
     } else { 
@@ -347,7 +347,7 @@ const addToLibrary = async (url) => {
       </div>
 
       <img src="/nth-logo.png" alt="Logo" style={{ width: '60px', margin: '0 auto', display: 'block' }} />
-      <h1 style={{ color: 'gold', fontSize: '20px', margin: '10px 0' }}>BANG MINH NGUYỆT CUNG</h1>
+      <h1 style={{ color: 'gold', fontSize: '20px', margin: '10px 0' }}>BANG THIÊN PHẠT</h1>
 
       <div style={{ display: 'flex', justifyContent: 'center', gap: '5px', background: '#0a0a0a', padding: '10px', borderRadius: '8px', border: '1px solid #222', marginBottom: '15px', flexWrap: 'wrap' }}>
         {Object.keys(classInfo).map(cls => (
