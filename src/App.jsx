@@ -104,6 +104,7 @@ function App() {
     updateTeamPosition(id, safeX, safeY);
   };
 
+  // --- HÀM THÊM MARKER MỚI ---
   const addNewMarker = async (type) => {
     if (!isAdmin) return;
 
@@ -112,21 +113,48 @@ function App() {
       if (!groupInput) return;
 
       const groupName = `Đoàn ${groupInput.trim()}`;
-      await supabase.from('team_positions').insert([{ 
+      const { error } = await supabase.from('team_positions').insert([{ 
         marker_type: 'party', 
         group_name: groupName, 
         pos_x: 50, 
         pos_y: 50 
       }]);
+      if (error) console.error("Lỗi thêm party:", error);
     } else {
-      await supabase.from('team_positions').insert([{ 
+      const { error } = await supabase.from('team_positions').insert([{ 
         marker_type: type, 
+        group_name: type.startsWith('Đoàn') ? type : null,
         pos_x: 50, 
         pos_y: 50 
       }]);
+      if (error) console.error("Lỗi thêm marker:", error);
     }
 
-    fetchData();
+    if (typeof fetchData === 'function') fetchData();
+  };
+
+  // --- HÀM TÍNH SĨ SỐ ĐOÀN (ĐÃ TỰ ĐỘNG TRỪ 6 CHO MỖI PARTY TÁCH RA) ---
+  const getGroupPureCount = (groupName) => {
+    if (!groupName) return 0;
+    
+    // 1. Tính tổng số thành viên chính thức thuộc Đoàn này trong sơ đồ
+    const activeTeamIds = Object.keys(teamGroups || {}).filter(teamId => teamGroups[teamId] === groupName).map(Number);
+    let totalPure = 0;
+    
+    if (activeTeamIds.length > 0 && Array.isArray(members)) {
+      activeTeamIds.forEach(teamId => {
+        const teamMems = members.filter(m => m.type === 'Chính thức' && m.team_slot >= (teamId - 1) * 6 + 1 && m.team_slot <= teamId * 6);
+        const pureMems = teamMems.filter(m => m.char_name && !m.has_item && !m.is_scout && !m.is_tower_team);
+        totalPure += pureMems.length;
+      });
+    }
+
+    // 2. Đếm số lượng Tổ đội 6 người (party) đã tách ra từ Đoàn này trên Map
+    const partyCount = (teamPositions || []).filter(p => p && p.marker_type === 'party' && p.group_name === groupName).length;
+
+    // 3. Trừ đi 6 người cho mỗi tổ đội được tách
+    const remaining = totalPure - (partyCount * 6);
+    return remaining >= 0 ? remaining : 0;
   };
 
   const removeMarker = async (id) => {
@@ -696,11 +724,11 @@ function App() {
         </div>
       </div>
 
-      <div className="map-section">
+   <div className="map-section">
   <h3 style={{ color: 'gold', margin: '0 0 5px 0', fontSize: '18px' }}>CHỈ ĐẠO CHIẾN THUẬT</h3>
   
   {isAdmin && (
-    <div className="admin-map-controls">
+    <div className="admin-map-controls" style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', marginBottom: '10px' }}>
       <button className="control-btn" style={{ background: '#7cd826', color: '#000' }} onClick={() => addNewMarker('Đoàn 1')}>+ Vòng tròn Đoàn 1</button>
       <button className="control-btn" style={{ background: '#d400ff', color: '#000' }} onClick={() => addNewMarker('Đoàn 2')}>+ Vòng tròn Đoàn 2</button>
       <button className="control-btn" style={{ background: '#5e75b4', color: '#000' }} onClick={() => addNewMarker('Đoàn 3')}>+ Vòng tròn Đoàn 3</button>
@@ -712,57 +740,92 @@ function App() {
     </div>
   )}
 
-  <div className="map-container" ref={mapRef}>
-  <img src="https://i.postimg.cc/SsMMSZLG/unnam2ed.jpg" alt="Tactical Map" className="map-bg" />
-  
-  {teamPositions && teamPositions.map((pos) => {
-    let bg = '#fff';
-    let label = '';
+  <div className="map-container" ref={mapRef} style={{ position: 'relative', overflow: 'hidden' }}>
+    <img src="https://i.postimg.cc/SsMMSZLG/unnam2ed.jpg" alt="Tactical Map" className="map-bg" style={{ width: '100%', display: 'block' }} />
     
-    // Tách tên Đoàn an toàn
-    const groupName = pos.group_name || pos.marker_type || 'Đoàn 1';
+    {Array.isArray(teamPositions) && teamPositions.map((pos) => {
+      if (!pos) return null;
 
-    if (pos.marker_type && pos.marker_type.startsWith('Đoàn')) {
-      const currentGroup = pos.marker_type;
-      bg = groupSettings[currentGroup]?.border || '#fff';
-      label = getGroupPureCount(currentGroup).toString();
-    } else if (pos.marker_type === 'party') {
-      // Nhận màu viền theo Đoàn mẹ, nhãn cố định là 6
-      bg = groupSettings[groupName]?.border || '#a855f7';
-      label = '6';
-    } else if (pos.marker_type === 'item') {
-      bg = '#ffd700';
-      label = '📦';
-    } else if (pos.marker_type === 'scout') {
-      bg = '#00ffff';
-      label = '🔎';
-    } else if (pos.marker_type === 'tower') {
-      bg = '#ff4500';
-      label = '🔨';
-    }
+      let bg = '#fff';
+      let label = '';
+      
+      // Xử lý Vòng tròn Đoàn
+      if (pos.marker_type && (pos.marker_type.startsWith('Đoàn') || pos.marker_type === 'doan')) {
+        const currentGroup = pos.group_name || pos.marker_type;
+        bg = groupSettings?.[currentGroup]?.border || '#3b82f6';
+        label = getGroupPureCount(currentGroup).toString();
+      } 
+      // Xử lý Tổ đội 6 người (Party)
+      else if (pos.marker_type === 'party') {
+        const parentGroup = pos.group_name || 'Đoàn 1';
+        bg = groupSettings?.[parentGroup]?.border || '#a855f7';
+        label = '6';
+      } 
+      // Xử lý Icon chức năng
+      else if (pos.marker_type === 'item') {
+        bg = '#ffd700';
+        label = '📦';
+      } else if (pos.marker_type === 'scout') {
+        bg = '#00ffff';
+        label = '🔎';
+      } else if (pos.marker_type === 'tower') {
+        bg = '#ff4500';
+        label = '🔨';
+      }
 
-    return (
-      <div 
-        key={pos.id} 
-        draggable={isAdmin} 
-        onDragEnd={(e) => handleDragEnd(e, pos.id)} 
-        className="team-node"
-        style={{ 
-          left: `${pos.pos_x}%`, 
-          top: `${pos.pos_y}%`, 
-          backgroundColor: bg,
-          color: '#000',
-          cursor: isAdmin ? 'move' : 'default'
-        }}
-      >
-        {label}
-        {isAdmin && (
-          <button className="marker-remove-btn" onClick={() => removeMarker(pos.id)}>×</button>
-        )}
-      </div>
-    );
-  })}
-</div>
+      return (
+        <div 
+          key={pos.id} 
+          draggable={isAdmin} 
+          onDragEnd={(e) => typeof handleDragEnd === 'function' && handleDragEnd(e, pos.id)} 
+          className="team-node"
+          style={{ 
+            position: 'absolute',
+            left: `${pos.pos_x}%`, 
+            top: `${pos.pos_y}%`, 
+            backgroundColor: bg,
+            color: '#000',
+            width: '40px',
+            height: '40px',
+            borderRadius: '50%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontWeight: 'bold',
+            cursor: isAdmin ? 'move' : 'default',
+            boxShadow: '0 2px 6px rgba(0,0,0,0.4)',
+            zIndex: 10
+          }}
+        >
+          {label}
+          {isAdmin && (
+            <button 
+              className="marker-remove-btn" 
+              onClick={() => removeMarker(pos.id)}
+              style={{
+                position: 'absolute',
+                top: '-5px',
+                right: '-5px',
+                background: 'red',
+                color: 'white',
+                border: 'none',
+                borderRadius: '50%',
+                width: '16px',
+                height: '16px',
+                fontSize: '10px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+            >
+              ×
+            </button>
+          )}
+        </div>
+      );
+    })}
+  </div>
 </div>
 
       {/* MODAL GIAO DIỆN CHỌN NHANH CHO ADMIN */}
