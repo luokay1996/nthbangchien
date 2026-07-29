@@ -446,36 +446,7 @@ function App() {
     );
   };
 
-  const addNewMarker = (type) => {
-  if (type === 'party') {
-    const groupInput = prompt("Tổ đội này thuộc Đoàn mấy? (Nhập 1, 2, 3 hoặc 4):", "1");
-    if (!groupInput) return;
-
-    const groupName = `Đoàn ${groupInput.trim()}`;
-    const newMarker = {
-      id: Date.now(),
-      marker_type: 'party',
-      group_name: groupName,
-      pos_x: 50,
-      pos_y: 50
-    };
-    setTeamPositions(prev => [...prev, newMarker]);
-  } else {
-    const newMarker = { id: Date.now(), marker_type: type, pos_x: 50, pos_y: 50 };
-    setTeamPositions(prev => [...prev, newMarker]);
-  }
-};
-
-const getGroupPureCount = (groupName) => {
-  const teamsInGroup = Object.keys(teamGroups).filter(t => teamGroups[t] === groupName).map(Number);
-  const totalInGroup = members.filter(m => m.team_slot && m.type === 'Chính thức' && teamsInGroup.includes(Math.ceil(m.team_slot / 6))).length;
   
-  // Đếm số marker Tổ đội 6 người đang gắn cho Đoàn này trên map
-  const partyCount = teamPositions.filter(p => p.marker_type === 'party' && p.group_name === groupName).length;
-
-  const remaining = totalInGroup - (partyCount * 6);
-  return remaining >= 0 ? remaining : 0;
-};
 
   return (
     <div className="app-container" style={{ backgroundColor: '#000', color: 'white', minHeight: '100vh', padding: '15px', textAlign: 'center', fontFamily: 'Arial', userSelect: 'none' }}>
