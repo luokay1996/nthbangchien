@@ -671,62 +671,63 @@ function App() {
       </div>
 
       <div className="map-section">
-        <h3 style={{ color: 'gold', margin: '0 0 5px 0', fontSize: '18px' }}>CHỈ ĐẠO CHIẾN THUẬT</h3>
-        
-        {isAdmin && (
-          <div className="admin-map-controls">
-            <button className="control-btn" style={{ background: '#7cd826', color: '#000' }} onClick={() => addNewMarker('Đoàn 1')}>+ Vòng tròn Đoàn 1</button>
-            <button className="control-btn" style={{ background: '#d400ff', color: '#000' }} onClick={() => addNewMarker('Đoàn 2')}>+ Vòng tròn Đoàn 2</button>
-            <button className="control-btn" style={{ background: '#5e75b4', color: '#000' }} onClick={() => addNewMarker('Đoàn 3')}>+ Vòng tròn Đoàn 3</button>
-            <button className="control-btn" style={{ background: '#ff4500', color: '#fff' }} onClick={() => addNewMarker('Đoàn 4')}>+ Vòng tròn Đoàn 4</button>
-            <button className="control-btn" style={{ background: '#a855f7', color: '#fff' }} onClick={() => addNewMarker('party')}>+ Tổ đội (6 người) 👥</button>
-            <button className="control-btn" style={{ background: '#555', color: '#fff' }} onClick={() => addNewMarker('item')}>+ Icon Vật Tư 📦</button>
-            <button className="control-btn" style={{ background: '#555', color: '#fff' }} onClick={() => addNewMarker('scout')}>+ Icon Scout 🔎</button>
-            <button className="control-btn" style={{ background: '#555', color: '#fff' }} onClick={() => addNewMarker('tower')}>+ Icon Trụ 🔨</button>
-          </div>
-        )}
+  <h3 style={{ color: 'gold', margin: '0 0 5px 0', fontSize: '18px' }}>CHỈ ĐẠO CHIẾN THUẬT</h3>
+  
+  {isAdmin && (
+    <div className="admin-map-controls">
+      <button className="control-btn" style={{ background: '#7cd826', color: '#000' }} onClick={() => addNewMarker('Đoàn 1')}>+ Vòng tròn Đoàn 1</button>
+      <button className="control-btn" style={{ background: '#d400ff', color: '#000' }} onClick={() => addNewMarker('Đoàn 2')}>+ Vòng tròn Đoàn 2</button>
+      <button className="control-btn" style={{ background: '#5e75b4', color: '#000' }} onClick={() => addNewMarker('Đoàn 3')}>+ Vòng tròn Đoàn 3</button>
+      <button className="control-btn" style={{ background: '#ff4500', color: '#fff' }} onClick={() => addNewMarker('Đoàn 4')}>+ Vòng tròn Đoàn 4</button>
+      <button className="control-btn" style={{ background: '#a855f7', color: '#fff' }} onClick={() => addNewMarker('party')}>+ Tổ đội (6 người) 👥</button>
+      <button className="control-btn" style={{ background: '#555', color: '#fff' }} onClick={() => addNewMarker('item')}>+ Icon Vật Tư 📦</button>
+      <button className="control-btn" style={{ background: '#555', color: '#fff' }} onClick={() => addNewMarker('scout')}>+ Icon Scout 🔎</button>
+      <button className="control-btn" style={{ background: '#555', color: '#fff' }} onClick={() => addNewMarker('tower')}>+ Icon Trụ 🔨</button>
+    </div>
+  )}
 
-        <div className="map-container" ref={mapRef}>
-          <img src="https://i.postimg.cc/SsMMSZLG/unnam2ed.jpg" alt="Tactical Map" className="map-bg" />
-          
-          {teamPositions.map((pos) => {
-            let bg = '#fff';
-            let label = '';
-            
-            if (pos.marker_type.startsWith('Đoàn')) {
-              const currentGroup = pos.marker_type;
-              bg = groupSettings[currentGroup]?.border || '#fff';
-              label = getGroupPureCount(currentGroup).toString();
-            } else if (pos.marker_type === 'party') {
-              bg = '#a855f7';
-              label = '👥';
-            } else if (pos.marker_type === 'item') {
-              bg = '#ffd700';
-              label = '📦';
-            } else if (pos.marker_type === 'scout') {
-              bg = '#00ffff';
-              label = '🔎';
-            } else if (pos.marker_type === 'tower') {
-              bg = '#ff4500';
-              label = '🔨';
-            }
+  <div className="map-container" ref={mapRef}>
+    <img src="https://i.postimg.cc/SsMMSZLG/unnam2ed.jpg" alt="Tactical Map" className="map-bg" />
+    
+    {teamPositions.map((pos) => {
+      let bg = '#fff';
+      let label = '';
+      
+      if (pos.marker_type.startsWith('Đoàn')) {
+        const currentGroup = pos.marker_type;
+        bg = groupSettings[currentGroup]?.border || '#fff';
+        label = getGroupPureCount(currentGroup).toString();
+      } else if (pos.marker_type === 'party') {
+        const parentGroup = pos.group_name || 'Đoàn 1';
+        bg = groupSettings[parentGroup]?.border || '#a855f7';
+        label = '6';
+      } else if (pos.marker_type === 'item') {
+        bg = '#ffd700';
+        label = '📦';
+      } else if (pos.marker_type === 'scout') {
+        bg = '#00ffff';
+        label = '🔎';
+      } else if (pos.marker_type === 'tower') {
+        bg = '#ff4500';
+        label = '🔨';
+      }
 
-            return (
-              <div key={pos.id} draggable={isAdmin} onDragEnd={(e) => handleDragEnd(e, pos.id)} className="team-node"
-                style={{ 
-                  left: `${pos.pos_x}%`, top: `${pos.pos_y}%`, 
-                  backgroundColor: bg,
-                  color: '#000', /* MOD ĐÃ ĐỔI: Chữ hiển thị số đếm luôn luôn màu đen */
-                  cursor: isAdmin ? 'move' : 'default'
-                }}
-              >
-                {label}
-                {isAdmin && <button className="marker-remove-btn" onClick={() => removeMarker(pos.id)}>×</button>}
-              </div>
-            );
-          })}
+      return (
+        <div key={pos.id} draggable={isAdmin} onDragEnd={(e) => handleDragEnd(e, pos.id)} className="team-node"
+          style={{ 
+            left: `${pos.pos_x}%`, top: `${pos.pos_y}%`, 
+            backgroundColor: bg,
+            color: '#000',
+            cursor: isAdmin ? 'move' : 'default'
+          }}
+        >
+          {label}
+          {isAdmin && <button className="marker-remove-btn" onClick={() => removeMarker(pos.id)}>×</button>}
         </div>
-      </div>
+      );
+    })}
+  </div>
+</div>
 
       {/* MODAL GIAO DIỆN CHỌN NHANH CHO ADMIN */}
       {assigningSlot && isAdmin && (
