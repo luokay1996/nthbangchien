@@ -121,28 +121,50 @@ function App() {
   };
 
   // --- HÀM THÊM MARKER MỚI ---
- const addNewMarker = async (type) => {
-  if (!isAdmin) return;
-  
-  // Tọa độ mặc định ở giữa bản đồ (50%, 50%)
-  const newMarker = {
-    pos_x: 50,
-    pos_y: 50,
-    marker_type: type,
-    // Đảm bảo gán group_name nếu là loại Đoàn
-    group_name: type.startsWith('Đoàn') ? type : 'Đoàn 1'
+// --- HÀM THÊM MARKER MỚI (ĐÃ SỬA LỖI VÒNG TRÒN ĐOÀN & TỨC THÌ UPDATE) ---
+  const addNewMarker = async (type) => {
+    if (!isAdmin) {
+      alert("Bạn chưa bật quyền Admin!");
+      return;
+    }
+
+    let groupName = null;
+
+    if (type === 'party') {
+      const groupInput = prompt("Tổ đội 6 người này tách từ Đoàn mấy? (Nhập 1, 2, 3 hoặc 4):", "1");
+      if (!groupInput) return;
+      groupName = `Đoàn ${groupInput.trim()}`;
+    } else if (type.startsWith('Đoàn')) {
+      groupName = type; // Gán chính xác 'Đoàn 1', 'Đoàn 2',...
+    }
+
+    const newPayload = {
+      marker_type: type, 
+      group_name: groupName,
+      pos_x: 50, 
+      pos_y: 50 
+    };
+
+    // 1. Cập nhật UI ngay lập tức cho mượt (Optimistic Update)
+    const tempId = Date.now();
+    setTeamPositions(prev => [...prev, { id: tempId, ...newPayload }]);
+
+    // 2. Gửi dữ liệu lên Supabase
+    const { data, error } = await supabase
+      .from('team_positions')
+      .insert([newPayload])
+      .select();
+
+    if (error) {
+      console.error("Lỗi thêm Marker vào DB:", error);
+      alert("Không thể lưu Marker vào Database! Kiểm tra lại cột Database hoặc Supabase connection.");
+      // Rollback UI nếu lỗi DB
+      setTeamPositions(prev => prev.filter(p => p.id !== tempId));
+    } else if (data && data.length > 0) {
+      // Thay thế ID tạm bằng ID thật từ Supabase
+      setTeamPositions(prev => prev.map(p => p.id === tempId ? data[0] : p));
+    }
   };
-
-  // Code lưu vào Supabase / Database của bạn
-  const { data, error } = await supabase
-    .from('team_positions')
-    .insert([newMarker])
-    .select();
-
-  if (!error && data) {
-    setTeamPositions(prev => [...prev, data[0]]);
-  }
-};
 
   // --- HÀM TÍNH SĨ SỐ ĐOÀN (ĐÃ TỰ ĐỘNG TRỪ 6 CHO MỖI PARTY TÁCH RA) ---
   const getGroupPureCount = (groupName) => {
