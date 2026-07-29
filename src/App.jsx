@@ -6,12 +6,12 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-// Đã sửa chính tả: 'Thần Tượng'
+
 const classInfo = {
   'Toái Mộng': { color: '#80C7E6' },
   'Thiết Y': { color: '#E6A35C' },
   'Huyết Hà': { color: '#A3534A' },
-  'Thần Tượng': { color: '#5E7FAF' }, 
+  'Thần Tương': { color: '#5E7FAF' }, 
   'Tố Vấn': { color: '#F28E99' },
   'Cửu Linh': { color: '#B36BB3' },
   'Long Ngâm': { color: '#8CB36B' },
