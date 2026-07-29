@@ -817,7 +817,7 @@ function App() {
           {isAdmin && <button className="marker-remove-btn" onClick={() => removeMarker(pos.id)}>×</button>}
         </div>
       );
-    })}
+  
   </div>
 </div>
 
