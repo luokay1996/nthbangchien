@@ -106,7 +106,26 @@ function App() {
 
   const addNewMarker = async (type) => {
     if (!isAdmin) return;
-    await supabase.from('team_positions').insert([{ marker_type: type, pos_x: 50, pos_y: 50 }]);
+
+    if (type === 'party') {
+      const groupInput = prompt("Tổ đội 6 người này tách từ Đoàn mấy? (Nhập 1, 2, 3 hoặc 4):", "1");
+      if (!groupInput) return;
+
+      const groupName = `Đoàn ${groupInput.trim()}`;
+      await supabase.from('team_positions').insert([{ 
+        marker_type: 'party', 
+        group_name: groupName, 
+        pos_x: 50, 
+        pos_y: 50 
+      }]);
+    } else {
+      await supabase.from('team_positions').insert([{ 
+        marker_type: type, 
+        pos_x: 50, 
+        pos_y: 50 
+      }]);
+    }
+
     fetchData();
   };
 
@@ -406,7 +425,10 @@ function App() {
       totalPure += pureMems.length;
     });
 
-    return totalPure;
+    const partyCount = teamPositions.filter(p => p.marker_type === 'party' && p.group_name === groupName).length;
+    const remaining = totalPure - (partyCount * 6);
+
+    return remaining >= 0 ? remaining : 0;
   };
 
   const totalItemsCount = members.filter(m => m.char_name && m.has_item).length;
