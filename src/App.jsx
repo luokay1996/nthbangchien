@@ -121,33 +121,28 @@ function App() {
   };
 
   // --- HÀM THÊM MARKER MỚI ---
-  const addNewMarker = async (type) => {
-    if (!isAdmin) return;
-
-    if (type === 'party') {
-      const groupInput = prompt("Tổ đội 6 người này tách từ Đoàn mấy? (Nhập 1, 2, 3 hoặc 4):", "1");
-      if (!groupInput) return;
-
-      const groupName = `Đoàn ${groupInput.trim()}`;
-      const { error } = await supabase.from('team_positions').insert([{ 
-        marker_type: 'party', 
-        group_name: groupName, 
-        pos_x: 50, 
-        pos_y: 50 
-      }]);
-      if (error) console.error("Lỗi thêm party:", error);
-    } else {
-      const { error } = await supabase.from('team_positions').insert([{ 
-        marker_type: type, 
-        group_name: type.startsWith('Đoàn') ? type : null,
-        pos_x: 50, 
-        pos_y: 50 
-      }]);
-      if (error) console.error("Lỗi thêm marker:", error);
-    }
-
-    fetchData();
+ const addNewMarker = async (type) => {
+  if (!isAdmin) return;
+  
+  // Tọa độ mặc định ở giữa bản đồ (50%, 50%)
+  const newMarker = {
+    pos_x: 50,
+    pos_y: 50,
+    marker_type: type,
+    // Đảm bảo gán group_name nếu là loại Đoàn
+    group_name: type.startsWith('Đoàn') ? type : 'Đoàn 1'
   };
+
+  // Code lưu vào Supabase / Database của bạn
+  const { data, error } = await supabase
+    .from('team_positions')
+    .insert([newMarker])
+    .select();
+
+  if (!error && data) {
+    setTeamPositions(prev => [...prev, data[0]]);
+  }
+};
 
   // --- HÀM TÍNH SĨ SỐ ĐOÀN (ĐÃ TỰ ĐỘNG TRỪ 6 CHO MỖI PARTY TÁCH RA) ---
   const getGroupPureCount = (groupName) => {
@@ -706,26 +701,62 @@ function App() {
           <img src="https://i.postimg.cc/SsMMSZLG/unnam2ed.jpg" alt="Tactical Map" className="map-bg" />
           
           {Array.isArray(teamPositions) && teamPositions.map((pos) => {
-            if (!pos) return null;
+  if (!pos) return null;
 
-            let bg = '#fff';
-            let label = '';
-            
-            if (pos.marker_type && (pos.marker_type.startsWith('Đoàn') || pos.marker_type === 'doan')) {
-              const currentGroup = pos.group_name || pos.marker_type;
-              bg = groupSettings?.[currentGroup]?.border || '#3b82f6';
-              label = getGroupPureCount(currentGroup).toString();
-            } else if (pos.marker_type === 'party') {
-              const parentGroup = pos.group_name || 'Đoàn 1';
-              bg = groupSettings?.[parentGroup]?.border || '#a855f7';
-              label = '6';
-            } else if (pos.marker_type === 'item') {
-              bg = '#ffd700'; label = '📦';
-            } else if (pos.marker_type === 'scout') {
-              bg = '#00ffff'; label = '🔎';
-            } else if (pos.marker_type === 'tower') {
-              bg = '#ff4500'; label = '🔨';
-            }
+  let bg = '#ffffff';
+  let label = '?'; // Giá trị mặc định nếu không khớp loại nào
+  
+  // Xác định nhóm (Đoàn 1, Đoàn 2, Đoàn 3, Đoàn 4)
+  const isDoan = pos.marker_type && (pos.marker_type.startsWith('Đoàn') || pos.marker_type === 'doan');
+
+  if (isDoan) {
+    // Nếu pos.group_name rỗng hoặc rơi vào 'doan', fallback về 'Đoàn 1'
+    const currentGroup = (pos.group_name && pos.group_name !== 'doan') ? pos.group_name : 'Đoàn 1';
+    bg = groupSettings?.[currentGroup]?.border || '#3b82f6';
+    
+    // Gọi hàm đếm an toàn, tránh crash nếu hàm trả về undefined/null
+    const count = typeof getGroupPureCount === 'function' ? getGroupPureCount(currentGroup) : 0;
+    label = (count ?? 0).toString();
+
+  } else if (pos.marker_type === 'party') {
+    const parentGroup = pos.group_name || 'Đoàn 1';
+    bg = groupSettings?.[parentGroup]?.border || '#a855f7';
+    label = '6';
+
+  } else if (pos.marker_type === 'item') {
+    bg = '#ffd700'; 
+    label = '📦';
+
+  } else if (pos.marker_type === 'scout') {
+    bg = '#00ffff'; 
+    label = '🔎';
+
+  } else if (pos.marker_type === 'tower') {
+    bg = '#ff4500'; 
+    label = '🔨';
+  }
+
+  return (
+    <div 
+      key={pos.id || Math.random()} 
+      draggable={isAdmin} 
+      onDragEnd={(e) => typeof handleDragEnd === 'function' && handleDragEnd(e, pos.id)} 
+      className="team-node"
+      style={{ 
+        left: `${pos.pos_x ?? 50}%`, 
+        top: `${pos.pos_y ?? 50}%`, 
+        backgroundColor: bg,
+        color: '#000',
+        cursor: isAdmin ? 'move' : 'default'
+      }}
+    >
+      {label}
+      {isAdmin && (
+        <button className="marker-remove-btn" onClick={() => removeMarker(pos.id)}>×</button>
+      )}
+    </div>
+  );
+})}
 
             return (
               <div 
