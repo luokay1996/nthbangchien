@@ -134,6 +134,10 @@ function App() {
       const groupInput = prompt("Tổ đội 6 người này tách từ Đoàn mấy? (Nhập 1, 2, 3 hoặc 4):", "1");
       if (!groupInput) return;
       groupName = `Đoàn ${groupInput.trim()}`;
+    } else if (type === 'enemy') {
+      const enemyInput = prompt("Tên/Ký hiệu đội địch (Ví dụ: Địch 1, Trục chính, Địch Bắc...):", "Địch 1");
+      if (!enemyInput) return;
+      groupName = enemyInput.trim();
     } else if (type.startsWith('Đoàn')) {
       groupName = type; // Gán chính xác 'Đoàn 1', 'Đoàn 2',...
     }
@@ -713,47 +717,99 @@ function App() {
             <button className="control-btn" style={{ background: '#5e75b4', color: '#fff' }} onClick={() => addNewMarker('Đoàn 3')}>+ Vòng tròn Đoàn 3</button>
             <button className="control-btn" style={{ background: '#ff4500', color: '#fff' }} onClick={() => addNewMarker('Đoàn 4')}>+ Vòng tròn Đoàn 4</button>
             <button className="control-btn" style={{ background: '#a855f7', color: '#fff' }} onClick={() => addNewMarker('party')}>+ Tổ đội (6 người) 👥</button>
+            <button className="control-btn" style={{ background: '#dc2626', color: '#fff' }} onClick={() => addNewMarker('enemy')}>+ Icon Team Địch ⚔️</button>
             <button className="control-btn" style={{ background: '#333', color: '#fff' }} onClick={() => addNewMarker('item')}>+ Icon Vật Tư 📦</button>
             <button className="control-btn" style={{ background: '#333', color: '#fff' }} onClick={() => addNewMarker('scout')}>+ Icon Scout 🔎</button>
             <button className="control-btn" style={{ background: '#333', color: '#fff' }} onClick={() => addNewMarker('tower')}>+ Icon Trụ 🔨</button>
           </div>
         )}
 
-        <div className="map-container" ref={mapRef} onDragOver={(e) => e.preventDefault()}>
-          <img src="https://i.postimg.cc/SsMMSZLG/unnam2ed.jpg" alt="Tactical Map" className="map-bg" />
-          
-          {Array.isArray(teamPositions) && teamPositions.map((pos) => {
-            if (!pos) return null;
+       <div className="map-container" ref={mapRef} onDragOver={(e) => e.preventDefault()}>
+  <img src="https://i.postimg.cc/SsMMSZLG/unnam2ed.jpg" alt="Tactical Map" className="map-bg" />
+  
+  {Array.isArray(teamPositions) && teamPositions.map((pos) => {
+    if (!pos) return null;
 
-            let bg = '#ffffff';
-            let label = '?'; // Giá trị mặc định
-            
-            // Xác định nhóm (Đoàn 1, Đoàn 2, Đoàn 3, Đoàn 4)
-            const isDoan = pos.marker_type && (pos.marker_type.startsWith('Đoàn') || pos.marker_type === 'doan');
+    let bg = '#ffffff';
+    let label = '?'; // Giá trị mặc định
+    
+    // Xác định nhóm (Đoàn 1, Đoàn 2, Đoàn 3, Đoàn 4)
+    const isDoan = pos.marker_type && (pos.marker_type.startsWith('Đoàn') || pos.marker_type === 'doan');
 
-            if (isDoan) {
-              const currentGroup = (pos.group_name && pos.group_name !== 'doan') ? pos.group_name : 'Đoàn 1';
-              bg = groupSettings?.[currentGroup]?.border || '#3b82f6';
-              const count = typeof getGroupPureCount === 'function' ? getGroupPureCount(currentGroup) : 0;
-              label = (count ?? 0).toString();
+    if (isDoan) {
+      const currentGroup = (pos.group_name && pos.group_name !== 'doan') ? pos.group_name : 'Đoàn 1';
+      bg = groupSettings?.[currentGroup]?.border || '#3b82f6';
+      const count = typeof getGroupPureCount === 'function' ? getGroupPureCount(currentGroup) : 0;
+      label = (count ?? 0).toString();
 
-            } else if (pos.marker_type === 'party') {
-              const parentGroup = pos.group_name || 'Đoàn 1';
-              bg = groupSettings?.[parentGroup]?.border || '#a855f7';
-              label = '6';
+    } else if (pos.marker_type === 'party') {
+      const parentGroup = pos.group_name || 'Đoàn 1';
+      bg = groupSettings?.[parentGroup]?.border || '#a855f7';
+      label = '6';
 
-            } else if (pos.marker_type === 'item') {
-              bg = '#ffd700'; 
-              label = '📦';
+    } else if (pos.marker_type === 'enemy') {
+      bg = '#dc2626'; // Màu đỏ chiến đấu
+      label = '⚔️';
 
-            } else if (pos.marker_type === 'scout') {
-              bg = '#00ffff'; 
-              label = '🔎';
+    } else if (pos.marker_type === 'item') {
+      bg = '#ffd700'; 
+      label = '📦';
 
-            } else if (pos.marker_type === 'tower') {
-              bg = '#ff4500'; 
-              label = '🔨';
-            }
+    } else if (pos.marker_type === 'scout') {
+      bg = '#00ffff'; 
+      label = '🔎';
+
+    } else if (pos.marker_type === 'tower') {
+      bg = '#ff4500'; 
+      label = '🔨';
+    } 
+
+    return (
+      <div 
+        key={pos.id || Math.random()} 
+        draggable={isAdmin} 
+        onDragEnd={(e) => typeof handleDragEnd === 'function' && handleDragEnd(e, pos.id)} 
+        className="team-node"
+        style={{ 
+          left: `${pos.pos_x ?? 50}%`, 
+          top: `${pos.pos_y ?? 50}%`, 
+          backgroundColor: bg,
+          color: '#000',
+          cursor: isAdmin ? 'move' : 'default',
+          border: pos.marker_type === 'enemy' ? '2px solid #f87171' : '2px solid #fff',
+          boxShadow: pos.marker_type === 'enemy' ? '0 0 12px rgba(220, 38, 38, 0.9)' : '0 0 15px rgba(0,0,0,0.8)',
+          position: 'absolute'
+        }}
+        title={pos.marker_type === 'enemy' ? (pos.group_name || 'Đội Địch') : undefined}
+      >
+        {label}
+
+        {/* Nhãn hiển thị tên Đội Địch bên dưới icon */}
+        {pos.marker_type === 'enemy' && (
+          <span style={{
+            position: 'absolute',
+            bottom: '-18px',
+            whiteSpace: 'nowrap',
+            fontSize: '10px',
+            backgroundColor: 'rgba(0,0,0,0.85)',
+            padding: '1px 5px',
+            borderRadius: '3px',
+            color: '#fca5a5',
+            border: '1px solid #dc2626',
+            pointerEvents: 'none'
+          }}>
+            {pos.group_name || 'Địch'}
+          </span>
+        )}
+
+        {/* Nút Xóa Marker dành cho Admin */}
+        {isAdmin && (
+          <button className="marker-remove-btn" onClick={() => removeMarker(pos.id)}>×</button>
+        )}
+      </div>
+    );
+  })}
+</div>
 
             return (
               <div 
