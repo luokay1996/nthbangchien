@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
+import './App.css'; 
 
 const supabase = createClient(
   import.meta.env.VITE_SUPABASE_URL,
@@ -445,8 +446,6 @@ function App() {
     );
   };
 
- import React from 'react';
-import './App.css'; // Đảm bảo đã import file CSS ở trên
 
 
   return (
