@@ -713,112 +713,56 @@ function App() {
   )}
 
   <div className="map-container" ref={mapRef}>
-    <img src="https://i.postimg.cc/SsMMSZLG/unnam2ed.jpg" alt="Tactical Map" className="map-bg" />
-    
+  <img src="https://i.postimg.cc/SsMMSZLG/unnam2ed.jpg" alt="Tactical Map" className="map-bg" />
+  
   {teamPositions && teamPositions.map((pos) => {
-  if (!pos) return null;
+    let bg = '#fff';
+    let label = '';
+    
+    // Tách tên Đoàn an toàn
+    const groupName = pos.group_name || pos.marker_type || 'Đoàn 1';
 
-  let bg = '#3b82f6';
-  let label = '';
-  
-  // Xử lý an toàn tên đoàn để không bị crash nếu groupSettings bị null
-  const groupName = pos.group_name || pos.marker_type || 'Đoàn 1';
-  const groupColor = (typeof groupSettings !== 'undefined' && groupSettings[groupName]?.border) 
-    ? groupSettings[groupName].border 
-    : '#3b82f6';
+    if (pos.marker_type && pos.marker_type.startsWith('Đoàn')) {
+      const currentGroup = pos.marker_type;
+      bg = groupSettings[currentGroup]?.border || '#fff';
+      label = getGroupPureCount(currentGroup).toString();
+    } else if (pos.marker_type === 'party') {
+      // Nhận màu viền theo Đoàn mẹ, nhãn cố định là 6
+      bg = groupSettings[groupName]?.border || '#a855f7';
+      label = '6';
+    } else if (pos.marker_type === 'item') {
+      bg = '#ffd700';
+      label = '📦';
+    } else if (pos.marker_type === 'scout') {
+      bg = '#00ffff';
+      label = '🔎';
+    } else if (pos.marker_type === 'tower') {
+      bg = '#ff4500';
+      label = '🔨';
+    }
 
-  // 1. Kiểm tra nếu là Vòng Tròn Đoàn
-  if (pos.marker_type === 'doan' || (pos.marker_type && pos.marker_type.startsWith('Đoàn'))) {
-    bg = groupColor;
-    label = typeof getGroupPureCount === 'function' ? getGroupPureCount(groupName).toString() : '0';
-  } 
-  // 2. Kiểm tra nếu là Team 6 (Party)
-  else if (pos.marker_type === 'party') {
-    bg = groupColor;
-    label = '6';
-  } 
-  // 3. Các marker chức năng
-  else if (pos.marker_type === 'item') {
-    bg = '#ffd700';
-    label = '📦';
-  } else if (pos.marker_type === 'scout') {
-    bg = '#00ffff';
-    label = '🔎';
-  } else if (pos.marker_type === 'tower') {
-    bg = '#ff4500';
-    label = '🔨';
-  } else {
-    label = pos.marker_type || '?';
-  }
-
-  return (
-    <div 
-      key={pos.id} 
-      style={{
-        position: 'absolute',
-        left: `${pos.pos_x || 50}%`,
-        top: `${pos.pos_y || 50}%`,
-        backgroundColor: bg,
-        width: '45px',
-        height: '45px',
-        borderRadius: '50%',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        fontWeight: 'bold',
-        color: '#fff',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
-        cursor: typeof isAdmin !== 'undefined' && isAdmin ? 'move' : 'pointer',
-        zIndex: 10
-      }}
-    >
-      {label}
-      
-      {typeof isAdmin !== 'undefined' && isAdmin && (
-        <span 
-          onClick={(e) => { 
-            e.stopPropagation(); 
-            if (typeof removeMarker === 'function') removeMarker(pos.id); 
-          }}
-          style={{
-            position: 'absolute',
-            top: '-5px',
-            right: '-5px',
-            background: 'red',
-            color: 'white',
-            borderRadius: '50%',
-            width: '18px',
-            height: '18px',
-            fontSize: '11px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer',
-            fontWeight: 'normal'
-          }}
-        >
-          ✕
-        </span>
-      )}
-    </div>
-  );
-})}
-
-      return (
-        <div key={pos.id} draggable={isAdmin} onDragEnd={(e) => handleDragEnd(e, pos.id)} className="team-node"
-          style={{ 
-            left: `${pos.pos_x}%`, top: `${pos.pos_y}%`, 
-            backgroundColor: bg,
-            color: '#000',
-            cursor: isAdmin ? 'move' : 'default'
-          }}
-        >
-          {label}
-          {isAdmin && <button className="marker-remove-btn" onClick={() => removeMarker(pos.id)}>×</button>}
-        </div>
-      );
-  
-  </div>
+    return (
+      <div 
+        key={pos.id} 
+        draggable={isAdmin} 
+        onDragEnd={(e) => handleDragEnd(e, pos.id)} 
+        className="team-node"
+        style={{ 
+          left: `${pos.pos_x}%`, 
+          top: `${pos.pos_y}%`, 
+          backgroundColor: bg,
+          color: '#000',
+          cursor: isAdmin ? 'move' : 'default'
+        }}
+      >
+        {label}
+        {isAdmin && (
+          <button className="marker-remove-btn" onClick={() => removeMarker(pos.id)}>×</button>
+        )}
+      </div>
+    );
+  })}
+</div>
 </div>
 
       {/* MODAL GIAO DIỆN CHỌN NHANH CHO ADMIN */}
