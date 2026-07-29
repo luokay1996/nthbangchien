@@ -680,7 +680,7 @@ function App() {
         </div>
       </div>
 
-      {/* BẢN ĐỒ CHỈ ĐẠO CHIẾN THUẬT */}
+     {/* BẢN ĐỒ CHỈ ĐẠO CHIẾN THUẬT */}
       <div className="map-section">
         <h3 style={{ color: 'gold', margin: '0 0 10px 0', fontSize: '18px' }}>CHỈ ĐẠO CHIẾN THUẬT</h3>
         
@@ -701,72 +701,47 @@ function App() {
           <img src="https://i.postimg.cc/SsMMSZLG/unnam2ed.jpg" alt="Tactical Map" className="map-bg" />
           
           {Array.isArray(teamPositions) && teamPositions.map((pos) => {
-  if (!pos) return null;
+            if (!pos) return null;
 
-  let bg = '#ffffff';
-  let label = '?'; // Giá trị mặc định nếu không khớp loại nào
-  
-  // Xác định nhóm (Đoàn 1, Đoàn 2, Đoàn 3, Đoàn 4)
-  const isDoan = pos.marker_type && (pos.marker_type.startsWith('Đoàn') || pos.marker_type === 'doan');
+            let bg = '#ffffff';
+            let label = '?'; // Giá trị mặc định
+            
+            // Xác định nhóm (Đoàn 1, Đoàn 2, Đoàn 3, Đoàn 4)
+            const isDoan = pos.marker_type && (pos.marker_type.startsWith('Đoàn') || pos.marker_type === 'doan');
 
-  if (isDoan) {
-    // Nếu pos.group_name rỗng hoặc rơi vào 'doan', fallback về 'Đoàn 1'
-    const currentGroup = (pos.group_name && pos.group_name !== 'doan') ? pos.group_name : 'Đoàn 1';
-    bg = groupSettings?.[currentGroup]?.border || '#3b82f6';
-    
-    // Gọi hàm đếm an toàn, tránh crash nếu hàm trả về undefined/null
-    const count = typeof getGroupPureCount === 'function' ? getGroupPureCount(currentGroup) : 0;
-    label = (count ?? 0).toString();
+            if (isDoan) {
+              const currentGroup = (pos.group_name && pos.group_name !== 'doan') ? pos.group_name : 'Đoàn 1';
+              bg = groupSettings?.[currentGroup]?.border || '#3b82f6';
+              const count = typeof getGroupPureCount === 'function' ? getGroupPureCount(currentGroup) : 0;
+              label = (count ?? 0).toString();
 
-  } else if (pos.marker_type === 'party') {
-    const parentGroup = pos.group_name || 'Đoàn 1';
-    bg = groupSettings?.[parentGroup]?.border || '#a855f7';
-    label = '6';
+            } else if (pos.marker_type === 'party') {
+              const parentGroup = pos.group_name || 'Đoàn 1';
+              bg = groupSettings?.[parentGroup]?.border || '#a855f7';
+              label = '6';
 
-  } else if (pos.marker_type === 'item') {
-    bg = '#ffd700'; 
-    label = '📦';
+            } else if (pos.marker_type === 'item') {
+              bg = '#ffd700'; 
+              label = '📦';
 
-  } else if (pos.marker_type === 'scout') {
-    bg = '#00ffff'; 
-    label = '🔎';
+            } else if (pos.marker_type === 'scout') {
+              bg = '#00ffff'; 
+              label = '🔎';
 
-  } else if (pos.marker_type === 'tower') {
-    bg = '#ff4500'; 
-    label = '🔨';
-  }
-
-  return (
-    <div 
-      key={pos.id || Math.random()} 
-      draggable={isAdmin} 
-      onDragEnd={(e) => typeof handleDragEnd === 'function' && handleDragEnd(e, pos.id)} 
-      className="team-node"
-      style={{ 
-        left: `${pos.pos_x ?? 50}%`, 
-        top: `${pos.pos_y ?? 50}%`, 
-        backgroundColor: bg,
-        color: '#000',
-        cursor: isAdmin ? 'move' : 'default'
-      }}
-    >
-      {label}
-      {isAdmin && (
-        <button className="marker-remove-btn" onClick={() => removeMarker(pos.id)}>×</button>
-      )}
-    </div>
-  );
-})}
+            } else if (pos.marker_type === 'tower') {
+              bg = '#ff4500'; 
+              label = '🔨';
+            }
 
             return (
               <div 
-                key={pos.id} 
+                key={pos.id || Math.random()} 
                 draggable={isAdmin} 
                 onDragEnd={(e) => typeof handleDragEnd === 'function' && handleDragEnd(e, pos.id)} 
                 className="team-node"
                 style={{ 
-                  left: `${pos.pos_x}%`, 
-                  top: `${pos.pos_y}%`, 
+                  left: `${pos.pos_x ?? 50}%`, 
+                  top: `${pos.pos_y ?? 50}%`, 
                   backgroundColor: bg,
                   color: '#000',
                   cursor: isAdmin ? 'move' : 'default'
