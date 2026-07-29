@@ -715,27 +715,29 @@ function App() {
   <div className="map-container" ref={mapRef}>
     <img src="https://i.postimg.cc/SsMMSZLG/unnam2ed.jpg" alt="Tactical Map" className="map-bg" />
     
-   {teamPositions.map((pos) => {
-  let bg = '#fff';
+  {teamPositions && teamPositions.map((pos) => {
+  if (!pos) return null;
+
+  let bg = '#3b82f6';
   let label = '';
   
-  // 1. Nếu là Vòng tròn Đoàn (marker_type có thể là 'doan' hoặc bắt đầu bằng 'Đoàn')
-  if (pos.marker_type === 'doan' || pos.marker_type.startsWith('Đoàn')) {
-    // Lấy tên Đoàn chính xác từ group_name hoặc marker_type
-    const currentGroup = pos.group_name || pos.marker_type;
-    bg = groupSettings[currentGroup]?.border || '#3b82f6';
-    
-    // Gọi hàm lấy sĩ số thuần đã trừ các Team 6 tách ra
-    label = getGroupPureCount(currentGroup).toString();
+  // Xử lý an toàn tên đoàn để không bị crash nếu groupSettings bị null
+  const groupName = pos.group_name || pos.marker_type || 'Đoàn 1';
+  const groupColor = (typeof groupSettings !== 'undefined' && groupSettings[groupName]?.border) 
+    ? groupSettings[groupName].border 
+    : '#3b82f6';
+
+  // 1. Kiểm tra nếu là Vòng Tròn Đoàn
+  if (pos.marker_type === 'doan' || (pos.marker_type && pos.marker_type.startsWith('Đoàn'))) {
+    bg = groupColor;
+    label = typeof getGroupPureCount === 'function' ? getGroupPureCount(groupName).toString() : '0';
   } 
-  // 2. Nếu là Team 6 người (Party) tách ra từ Đoàn
+  // 2. Kiểm tra nếu là Team 6 (Party)
   else if (pos.marker_type === 'party') {
-    const parentGroup = pos.group_name || 'Đoàn 1';
-    // Lấy màu viền/mền theo Đoàn mẹ để dễ nhận biết team này thuộc Đoàn nào
-    bg = groupSettings[parentGroup]?.border || '#a855f7'; 
-    label = '6'; // Luôn hiển thị cố định là 6 người
+    bg = groupColor;
+    label = '6';
   } 
-  // 3. Các marker chức năng khác
+  // 3. Các marker chức năng
   else if (pos.marker_type === 'item') {
     bg = '#ffd700';
     label = '📦';
@@ -745,6 +747,8 @@ function App() {
   } else if (pos.marker_type === 'tower') {
     bg = '#ff4500';
     label = '🔨';
+  } else {
+    label = pos.marker_type || '?';
   }
 
   return (
@@ -752,8 +756,8 @@ function App() {
       key={pos.id} 
       style={{
         position: 'absolute',
-        left: `${pos.pos_x}%`,
-        top: `${pos.pos_y}%`,
+        left: `${pos.pos_x || 50}%`,
+        top: `${pos.pos_y || 50}%`,
         backgroundColor: bg,
         width: '45px',
         height: '45px',
@@ -764,15 +768,18 @@ function App() {
         fontWeight: 'bold',
         color: '#fff',
         boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
-        cursor: isAdmin ? 'move' : 'pointer'
+        cursor: typeof isAdmin !== 'undefined' && isAdmin ? 'move' : 'pointer',
+        zIndex: 10
       }}
     >
       {label}
       
-      {/* Nút xóa marker dành cho Admin */}
-      {isAdmin && (
+      {typeof isAdmin !== 'undefined' && isAdmin && (
         <span 
-          onClick={(e) => { e.stopPropagation(); removeMarker(pos.id); }}
+          onClick={(e) => { 
+            e.stopPropagation(); 
+            if (typeof removeMarker === 'function') removeMarker(pos.id); 
+          }}
           style={{
             position: 'absolute',
             top: '-5px',
@@ -780,13 +787,14 @@ function App() {
             background: 'red',
             color: 'white',
             borderRadius: '50%',
-            width: '16px',
-            height: '16px',
-            fontSize: '10px',
+            width: '18px',
+            height: '18px',
+            fontSize: '11px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            cursor: 'pointer'
+            cursor: 'pointer',
+            fontWeight: 'normal'
           }}
         >
           ✕
