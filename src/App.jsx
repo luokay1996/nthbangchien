@@ -1,6 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import './App.css'; 
 
 const supabase = createClient(
   import.meta.env.VITE_SUPABASE_URL,
@@ -367,6 +366,7 @@ function App() {
     fetchData();
   };
 
+  // HÀM ĐÃ ĐƯỢC SỬA: Chỉ xóa khỏi ô sơ đồ (Đưa về danh sách chờ) chứ không xóa khỏi hệ thống
   const deleteMember = async () => {
     if (!isAdmin || !selectedMember) return;
     if (window.confirm(`Xác nhận xóa [${selectedMember.char_name}] khỏi vị trí ô sơ đồ? (Họ sẽ quay lại danh sách chờ)`)) {
@@ -446,147 +446,213 @@ function App() {
     );
   };
 
-
-
   return (
-    <div className="app-container">
-      {/* KHU VỰC NÚT ĐIỀU HÀNH ADMIN */}
-      <div className="admin-header-actions">
-        <button
-          onClick={handleAdminLogin}
-          className={`btn-admin ${isAdmin ? 'active' : 'inactive'}`}
-        >
-          {isAdmin ? 'MODE: ADMIN CONTROL' : 'ADMIN LOGIN'}
+    <div className="app-container" style={{ backgroundColor: '#000', color: 'white', minHeight: '100vh', padding: '15px', textAlign: 'center', fontFamily: 'Arial', userSelect: 'none' }}>
+      <style>{`
+        /* --- GIAO DIỆN MOBILE / MẶC ĐỊNH --- */
+        .app-container { max-width: 100%; margin: 0 auto; }
+        .header-stats { display: flex; justify-content: center; gap: 5px; background: #0a0a0a; padding: 10px; borderRadius: '8px'; border: 1px solid #222; marginBottom: '15px'; flex-wrap: wrap; }
+        .team-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; max-width: 100%; margin: 0 auto; }
+        .slot-cell { height: 42px; margin: 3px 0; font-size: 10px; }
+        .leader-icon { font-size: 8px; }
+        .group-select { width: 100%; background: #000; color: #fff; border: 1px solid #444; font-size: 10px; border-radius: 3px; cursor: pointer; margin-top: 5px; padding: 3px; font-weight: bold; appearance: none; text-align: center; }
+        .group-select:disabled { cursor: default; border-style: dashed; color: #fff; opacity: 1; }
+        .map-section { max-width: 900px; margin: 40px auto; padding: 20px; background: #0a0a0a; border-radius: 12px; border: 1px solid #333; position: relative; }
+        .map-container { position: relative; width: 100%; border-radius: 8px; overflow: hidden; border: 2px solid #444; margin-top: 15px; }
+        .map-bg { width: 100%; display: block; opacity: 0.8; pointer-events: none; -webkit-user-drag: none; }
+        
+        .team-node { 
+          position: absolute; border-radius: 50%; 
+          display: flex; flex-direction: column; align-items: center; justify-content: center; 
+          font-size: 13px; font-weight: bold; cursor: move; 
+          transform: translate(-50%, -50%); border: 2px solid #fff; 
+          box-shadow: 0 0 15px rgba(0,0,0,0.8);
+          z-index: 10; transition: transform 0.1s;
+          touch-action: none;
+          width: 36px; height: 36px;
+        }
+        .team-node:active { transform: translate(-50%, -50%) scale(1.2); z-index: 100; }
+        .marker-remove-btn { position: absolute; top: -6px; right: -6px; background: red; color: white; border: none; border-radius: 50%; width: 14px; height: 14px; font-size: 9px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-weight: bold; z-index: 20; }
+        .admin-map-controls { display: flex; gap: 10px; justify-content: center; margin-bottom: 15px; flex-wrap: wrap; }
+        .control-btn { padding: 6px 12px; font-size: 11px; font-weight: bold; border-radius: 4px; cursor: pointer; border: 1px solid #444; color: white; }
+        .skill-box { width: 65px; height: 65px; background: #222; border: 1px solid #444; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #555; position: relative; overflow: visible; }
+        .skill-lib-item-container { position: relative; }
+        .skill-lib-item { width: 60px; height: 60px; cursor: pointer; border-radius: 6px; border: 1px solid #333; transition: transform 0.1s; }
+        .skill-lib-item:hover { border-color: gold; transform: scale(1.1); }
+        .lib-remove-btn { position: absolute; top: -5px; right: -5px; background: black; color: red; border: 1px solid red; border-radius: 50%; width: 16px; height: 16px; font-size: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 5; }
+        .custom-add-skill { display: flex; gap: 5px; margin-top: 10px; padding: 0 10px; }
+        .custom-input { flex: 1; background: #000; border: 1px solid #444; color: white; padding: 6px; border-radius: 4px; }
+        .upload-btn { background: #333; color: white; border: 1px solid #555; padding: 6px 10px; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        .add-btn { background: #d4af37; color: black; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        
+        .member-select-chip { padding: 6px 10px; border-radius: 4px; font-size: 11px; font-weight: bold; cursor: pointer; text-align: center; border: 1px solid rgba(255,255,255,0.1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: white; }
+        .member-select-chip:hover { border-color: #fff; transform: scale(1.03); }
+
+        .waiting-box { max-width: 100%; margin: 30px auto 10px auto; background: #0a0a0a; border: 1px solid #222; border-radius: 8px; padding: 15px; text-align: left; }
+        .waiting-flex-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 6px; margin-top: 10px; }
+        .waiting-item-chip { display: flex; align-items: center; justify-content: space-between; height: 26px; padding: 0 6px 0 10px; border-radius: 4px; font-size: 11px; font-weight: bold; overflow: hidden; border: 1px solid rgba(255,255,255,0.1); cursor: pointer; }
+        .waiting-text-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; margin-right: 4px; }
+        .waiting-delete-icon-btn { background: rgba(0, 0, 0, 0.3); color: #ff4d4d; border: none; border-radius: 3px; width: 16px; height: 16px; font-size: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-weight: bold; flex-shrink: 0; transition: all 0.2s; }
+        .waiting-delete-icon-btn:hover { background: #ff4d4d; color: white; }
+
+        @media (min-width: 1024px) { 
+          .team-grid { grid-template-columns: repeat(10, 1fr); } 
+        }
+
+        /* --- CẤU HÌNH PHÓNG TO / FULL TRANG TRÊN PC --- */
+        @media (min-width: 1400px) {
+          .app-container {
+            max-width: 98vw;
+            padding: 25px !important;
+          }
+          h1 { font-size: 36px !important; margin: 20px 0 !important; }
+          
+          .header-stats {
+            padding: 18px !important;
+            font-size: 16px !important;
+            gap: 15px !important;
+          }
+          .header-stats div div { font-size: 14px !important; }
+          .header-stats div div:last-child { font-size: 20px !important; }
+
+          .team-grid {
+            max-width: 100% !important;
+            gap: 12px !important;
+          }
+          
+          .slot-cell {
+            height: 62px !important;
+            font-size: 15px !important;
+            margin: 5px 0 !important;
+          }
+          .leader-icon {
+            font-size: 13px !important;
+            top: 3px !important;
+            left: 4px !important;
+          }
+          .group-select {
+            font-size: 14px !important;
+            padding: 6px !important;
+            margin-top: 8px !important;
+          }
+
+          .waiting-box {
+            max-width: 100% !important;
+            padding: 25px !important;
+          }
+          .waiting-box h2 { font-size: 20px !important; }
+          .waiting-item-chip {
+            height: 38px !important;
+            font-size: 15px !important;
+          }
+          .waiting-flex-grid {
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)) !important;
+            gap: 10px !important;
+          }
+
+          .map-section {
+            max-width: 1300px !important;
+          }
+          .map-section h3 { font-size: 26px !important; }
+        }
+      `}</style>
+
+      <div style={{ position: 'absolute', top: '10px', right: '10px', display: 'flex', flexDirection: 'column', gap: '5px', alignItems: 'flex-end', zIndex: 100 }}>
+        <button onClick={handleAdminLogin} style={{ background: isAdmin ? '#d4af37' : 'transparent', color: isAdmin ? '#000' : '#d4af37', border: '1px solid #d4af37', padding: '5px 10px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>
+          {isAdmin ? "MODE: ADMIN CONTROL" : "ADMIN LOGIN"}
         </button>
         {isAdmin && (
-          <button onClick={handleResetBoard} className="btn-reset">
-            RESET DATA WEEK
-          </button>
+          <button onClick={handleResetBoard} style={{ background: 'blue', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>RESET DATA WEEK</button>
         )}
       </div>
 
-      {/* LOGO & TIÊU ĐỀ */}
-      <img src="/nth-logo.png" alt="Bang Thiên Phạt Logo" className="app-logo" />
-      <h1 className="app-title">♅ BANG THIÊN PHẠT ♅</h1>
+      <img src="/nth-logo.png" alt="Logo" style={{ width: '300px', margin: '0 auto', display: 'block' }} />
+      <h1 style={{ color: 'gold', fontSize: '20px', margin: '10px 0' }}>♅ BANG THIÊN PHẠT ♅</h1>
 
-      {/* BẢNG THỐNG KÊ HEADER */}
       <div className="header-stats">
-        {Object.keys(classInfo).map((cls) => (
-          <div key={cls} className="stat-class-item">
-            <div className="stat-class-name" style={{ color: classInfo[cls].color }}>
-              {cls}
-            </div>
-            <div className="stat-class-count">
-              {members.filter((m) => m.class_name === cls && m.team_slot).length}
-            </div>
+        {Object.keys(classInfo).map(cls => (
+  <div key={cls} style={{ borderRight: '1px solid #222', paddingRight: '5px', minWidth: '60px' }}>
+    <div style={{ color: classInfo[cls].color, fontSize: '10px', fontWeight: 'bold' }}>{cls}</div>
+    {/* Chỉ đếm thành viên có hệ phái tương ứng VÀ đã được xếp vào một ô (team_slot khác null) */}
+    <div style={{ fontSize: '14px' }}>
+      {members.filter(m => m.class_name === cls && m.team_slot).length}
+    </div>
+  </div>
+))}
+        <div style={{ paddingLeft: '8px', borderLeft: '2px solid #333', display: 'flex', gap: '15px' }}>
+          <div>
+            <div style={{ fontSize: '10px', fontWeight: 'bold', color: '#00FF00' }}>QUÂN SỐ</div>
+            <div style={{ fontSize: '14px', color: '#00FF00' }}>{officialCount} / 60</div>
           </div>
-        ))}
-
-        <div className="header-stats-summary">
-          <div className="stat-summary-item">
-            <div className="title" style={{ color: '#00FF00' }}>QUÂN SỐ</div>
-            <div className="val" style={{ color: '#00FF00' }}>{officialCount} / 60</div>
+          <div>
+            <div style={{ fontSize: '10px', fontWeight: 'bold', color: '#ff5e00' }}>📦 VẬT TƯ</div>
+            <div style={{ fontSize: '14px', color: '#ff6600' }}>{totalItemsCount}</div>
           </div>
-          <div className="stat-summary-item">
-            <div className="title" style={{ color: '#ff5e00' }}>📦 VẬT TƯ</div>
-            <div className="val" style={{ color: '#ff6600' }}>{totalItemsCount}</div>
+          <div>
+            <div style={{ fontSize: '10px', fontWeight: 'bold', color: '#00a2ff' }}>🔎 SCOUT</div>
+            <div style={{ fontSize: '14px', color: '#00ffff' }}>{totalScoutsCount}</div>
           </div>
-          <div className="stat-summary-item">
-            <div className="title" style={{ color: '#00a2ff' }}>🔎 SCOUT</div>
-            <div className="val" style={{ color: '#00ffff' }}>{totalScoutsCount}</div>
-          </div>
-          <div className="stat-summary-item">
-            <div className="title" style={{ color: '#ff4500' }}>🔨 TRỤ</div>
-            <div className="val" style={{ color: '#ff4500' }}>{totalTowersCount}</div>
+          <div>
+            <div style={{ fontSize: '10px', fontWeight: 'bold', color: '#ff4500' }}>🔨 TRỤ</div>
+            <div style={{ fontSize: '14px', color: '#ff4500' }}>{totalTowersCount}</div>
           </div>
         </div>
       </div>
-
-      {/* CHÚ THÍCH CHẾ ĐỘ XEM */}
+      
       {!isAdmin && (
-        <div className="view-only-banner">
+        <div style={{ margin: '15px auto', padding: '8px 15px', background: '#111', border: '1px dashed #444', borderRadius: '6px', maxWidth: '400px', fontSize: '11px', color: '#aaa' }}>
           🌐 Chế độ xem trực quan. Bấm trực tiếp vào thành viên để xem bộ kỹ năng (Skill).
         </div>
       )}
 
-      {/* SƠ ĐỒ ĐỘI HÌNH CHÍNH TẮC (10 TEAMS) */}
-      <div className="team-grid">
+      <div className="team-grid" style={{ marginTop: '15px' }}>
         {[...Array(10)].map((_, col) => {
           const teamNum = col + 1;
           const currentGroup = teamGroups[teamNum] || 'Đoàn 1';
           const settings = groupSettings[currentGroup] || groupSettings['Đoàn 1'];
           return (
-            <div
-              key={col}
-              className="team-card"
-              style={{
-                background: settings.bg,
-                border: `2px solid ${settings.border}`,
-                boxShadow: currentGroup !== 'Đoàn 1' ? `0 0 10px ${settings.border}33` : 'none',
-              }}
-            >
+            <div key={col} style={{ 
+              background: settings.bg, padding: '8px', borderRadius: '8px', border: `2px solid ${settings.border}`,
+              boxShadow: currentGroup !== 'Đoàn 1' ? `0 0 10px ${settings.border}33` : 'none'
+            }}>
               <div style={{ marginBottom: '6px' }}>
-                <span style={{ color: settings.label, fontSize: '11px', fontWeight: 'bold' }}>
-                  TEAM {teamNum}
-                </span>
-                <select
-                  className="group-select"
-                  style={{ borderColor: settings.border }}
-                  value={currentGroup}
-                  disabled={!isAdmin}
-                  onChange={(e) => handleGroupChange(teamNum, e.target.value)}
-                >
-                  {Object.keys(groupSettings).map((g) => (
-                    <option key={g} value={g}>{g}</option>
-                  ))}
+                <span style={{ color: settings.label, fontSize: '11px', fontWeight: 'bold' }}>TEAM {teamNum}</span>
+                <select className="group-select" style={{ borderColor: settings.border }} value={currentGroup} disabled={!isAdmin} onChange={(e) => handleGroupChange(teamNum, e.target.value)}>
+                  {Object.keys(groupSettings).map(g => <option key={g} value={g}>{g}</option>)}
                 </select>
               </div>
-              {[...Array(6)].map((_, row) =>
-                renderSlotCell('Chính thức', col * 6 + row + 1)
-              )}
+              {[...Array(6)].map((_, row) => renderSlotCell('Chính thức', col * 6 + row + 1))}
             </div>
           );
         })}
       </div>
 
-      {/* ĐỘI HÌNH DỰ BỊ */}
-      <h2 className="section-title-sub">DỰ BỊ (30)</h2>
+      <h2 style={{ color: '#87CEEB', fontSize: '15px', margin: '30px 0 10px 0' }}>DỰ BỊ (30)</h2>
       <div className="team-grid">
         {[...Array(30)].map((_, i) => renderSlotCell('Học việc', i + 1))}
       </div>
 
-      {/* THÀNH VIÊN CHỜ XẾP ĐỘI */}
       <div className="waiting-box">
-        <h2 className="waiting-header">
+        <h2 style={{ color: 'gold', fontSize: '13px', margin: '0 0 5px 0', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span>📋 THÀNH VIÊN CHỜ XẾP ĐỘI CHI TIẾT ({unassignedMembers.length})</span>
-          <span style={{ fontSize: '11px', color: '#666', fontWeight: 'normal' }}>
-            (Bấm vào để xem profile)
-          </span>
+          <span style={{ fontSize: '11px', color: '#666', fontWeight: 'normal' }}>(Bấm vào để xem profile)</span>
         </h2>
         <div className="waiting-flex-grid">
-          {unassignedMembers.map((m) => {
+          {unassignedMembers.map(m => {
             const hasClass = m.class_name && classInfo[m.class_name];
             return (
-              <div
-                key={m.id}
-                className="waiting-item-chip"
-                onClick={() => handleWaitingItemClick(m)}
-                style={{
-                  backgroundColor: hasClass ? classInfo[m.class_name].color : '#222',
-                  color: m.class_name === 'Long Ngâm' ? '#000' : 'white',
-                  border: hasClass ? 'none' : '1px dashed #555',
-                }}
-              >
-                <span
-                  className="waiting-text-name"
-                  title={`${m.char_name} ${m.class_name ? `(${m.class_name})` : '(Chưa chọn phái)'}`}
-                >
+              <div key={m.id} className="waiting-item-chip" onClick={() => handleWaitingItemClick(m)} style={{ 
+                backgroundColor: hasClass ? classInfo[m.class_name].color : '#222', 
+                color: m.class_name === 'Long Ngâm' ? '#000' : 'white',
+                border: hasClass ? 'none' : '1px dashed #555'
+              }}>
+                <span className="waiting-text-name" title={`${m.char_name} ${m.class_name ? `(${m.class_name})` : '(Chưa chọn phái)'}`}>
                   {m.char_name} {!m.class_name && '❓'}
                 </span>
                 {isAdmin && (
-                  <button
+                  <button 
                     type="button"
-                    className="waiting-delete-icon-btn"
+                    className="waiting-delete-icon-btn" 
                     title="Xóa hẳn khỏi kho chờ"
                     onClick={(e) => handleQuickDeleteWaiting(e, m.id, m.char_name)}
                   >
@@ -604,27 +670,16 @@ function App() {
         </div>
       </div>
 
-      {/* BẢN ĐỒ CHIẾN THUẬT */}
       <div className="map-section">
-        <h3 style={{ color: 'gold', margin: '0 0 5px 0', fontSize: '18px' }}>
-          CHỈ ĐẠO CHIẾN THUẬT
-        </h3>
-
+        <h3 style={{ color: 'gold', margin: '0 0 5px 0', fontSize: '18px' }}>CHỈ ĐẠO CHIẾN THUẬT</h3>
+        
         {isAdmin && (
           <div className="admin-map-controls">
-            {/* Các nút tạo Vòng tròn Đoàn */}
             <button className="control-btn" style={{ background: '#7cd826', color: '#000' }} onClick={() => addNewMarker('Đoàn 1')}>+ Vòng tròn Đoàn 1</button>
             <button className="control-btn" style={{ background: '#d400ff', color: '#000' }} onClick={() => addNewMarker('Đoàn 2')}>+ Vòng tròn Đoàn 2</button>
             <button className="control-btn" style={{ background: '#5e75b4', color: '#000' }} onClick={() => addNewMarker('Đoàn 3')}>+ Vòng tròn Đoàn 3</button>
             <button className="control-btn" style={{ background: '#ff4500', color: '#fff' }} onClick={() => addNewMarker('Đoàn 4')}>+ Vòng tròn Đoàn 4</button>
-
-            {/* Các nút tạo Đội 6 người */}
-            <button className="control-btn" style={{ background: '#7cd826', color: '#000', border: '2px dashed #fff' }} onClick={() => addNewMarker('Đội 6P (Đoàn 1)')}>+ Đội 6P (Đoàn 1)</button>
-            <button className="control-btn" style={{ background: '#d400ff', color: '#fff', border: '2px dashed #fff' }} onClick={() => addNewMarker('Đội 6P (Đoàn 2)')}>+ Đội 6P (Đoàn 2)</button>
-            <button className="control-btn" style={{ background: '#5e75b4', color: '#fff', border: '2px dashed #fff' }} onClick={() => addNewMarker('Đội 6P (Đoàn 3)')}>+ Đội 6P (Đoàn 3)</button>
-            <button className="control-btn" style={{ background: '#ff4500', color: '#fff', border: '2px dashed #fff' }} onClick={() => addNewMarker('Đội 6P (Đoàn 4)')}>+ Đội 6P (Đoàn 4)</button>
-
-            {/* Các nút Icon chức năng */}
+            <button className="control-btn" style={{ background: '#a855f7', color: '#fff' }} onClick={() => addNewMarker('party')}>+ Tổ đội (6 người) 👥</button>
             <button className="control-btn" style={{ background: '#555', color: '#fff' }} onClick={() => addNewMarker('item')}>+ Icon Vật Tư 📦</button>
             <button className="control-btn" style={{ background: '#555', color: '#fff' }} onClick={() => addNewMarker('scout')}>+ Icon Scout 🔎</button>
             <button className="control-btn" style={{ background: '#555', color: '#fff' }} onClick={() => addNewMarker('tower')}>+ Icon Trụ 🔨</button>
@@ -633,21 +688,18 @@ function App() {
 
         <div className="map-container" ref={mapRef}>
           <img src="https://i.postimg.cc/SsMMSZLG/unnam2ed.jpg" alt="Tactical Map" className="map-bg" />
-
+          
           {teamPositions.map((pos) => {
             let bg = '#fff';
             let label = '';
-            let borderStyle = '2px solid #fff';
-
+            
             if (pos.marker_type.startsWith('Đoàn')) {
               const currentGroup = pos.marker_type;
               bg = groupSettings[currentGroup]?.border || '#fff';
               label = getGroupPureCount(currentGroup).toString();
-            } else if (pos.marker_type.startsWith('Đội 6P')) {
-              const parentGroup = pos.marker_type.replace('Đội 6P (', '').replace(')', '');
-              bg = groupSettings[parentGroup]?.border || '#d4af37';
-              label = '6P';
-              borderStyle = '2px dashed #000';
+            } else if (pos.marker_type === 'party') {
+              bg = '#a855f7';
+              label = '👥';
             } else if (pos.marker_type === 'item') {
               bg = '#ffd700';
               label = '📦';
@@ -660,26 +712,16 @@ function App() {
             }
 
             return (
-              <div
-                key={pos.id}
-                draggable={isAdmin}
-                onDragEnd={(e) => handleDragEnd(e, pos.id)}
-                className="team-node"
-                style={{
-                  left: `${pos.pos_x}%`,
-                  top: `${pos.pos_y}%`,
+              <div key={pos.id} draggable={isAdmin} onDragEnd={(e) => handleDragEnd(e, pos.id)} className="team-node"
+                style={{ 
+                  left: `${pos.pos_x}%`, top: `${pos.pos_y}%`, 
                   backgroundColor: bg,
-                  border: borderStyle,
-                  color: '#000',
-                  cursor: isAdmin ? 'move' : 'default',
+                  color: '#000', /* MOD ĐÃ ĐỔI: Chữ hiển thị số đếm luôn luôn màu đen */
+                  cursor: isAdmin ? 'move' : 'default'
                 }}
               >
                 {label}
-                {isAdmin && (
-                  <button className="marker-remove-btn" onClick={() => removeMarker(pos.id)}>
-                    ×
-                  </button>
-                )}
+                {isAdmin && <button className="marker-remove-btn" onClick={() => removeMarker(pos.id)}>×</button>}
               </div>
             );
           })}
@@ -688,7 +730,7 @@ function App() {
 
       {/* MODAL GIAO DIỆN CHỌN NHANH CHO ADMIN */}
       {assigningSlot && isAdmin && (
-        <div className="modal-overlay-center">
+        <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', background: '#141414', padding: '20px', borderRadius: '12px', border: '2px solid gold', zIndex: 1100, width: '90%', maxWidth: '520px', boxShadow: '0 0 40px rgba(0,0,0,0.9)', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
           <div style={{ fontSize: '15px', fontWeight: 'bold', color: 'gold', marginBottom: '12px' }}>
             XẾP THÀNH VIÊN VÀO Ô [S{assigningSlot.slotNum} - {assigningSlot.type}]
           </div>
@@ -698,34 +740,18 @@ function App() {
               <div style={{ fontSize: '11px', color: '#888', textAlign: 'left', marginBottom: '6px', fontWeight: 'bold' }}>
                 BẤM VÀO TÊN ĐỂ CHỌN NGƯỜI ĐƯA VÀO Ô SƠ ĐỒ:
               </div>
-              <input
-                className="custom-input"
-                style={{ marginBottom: '8px', flex: 'none', fontSize: '11px' }}
-                placeholder="Tìm nhanh tên thành viên chờ..."
-                value={searchUnassigned}
-                onChange={(e) => setSearchUnassigned(e.target.value)}
-              />
-
+              <input className="custom-input" style={{ marginBottom: '8px', flex: 'none', fontSize: '11px' }} placeholder="Tìm nhanh tên thành viên chờ..." value={searchUnassigned} onChange={(e) => setSearchUnassigned(e.target.value)} />
+              
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', overflowY: 'auto', flex: 1, padding: '2px' }}>
                 {unassignedMembers
-                  .filter((m) => m.char_name.toLowerCase().includes(searchUnassigned.toLowerCase()))
-                  .map((m) => (
-                    <div
-                      key={m.id}
-                      className="member-select-chip"
-                      style={{
-                        backgroundColor: classInfo[m.class_name]?.color || '#333',
-                        color: m.class_name === 'Long Ngâm' ? '#000' : '#fff',
-                      }}
-                      onClick={() => startAssignMember(m)}
-                    >
+                  .filter(m => m.char_name.toLowerCase().includes(searchUnassigned.toLowerCase()))
+                  .map(m => (
+                    <div key={m.id} className="member-select-chip" style={{ backgroundColor: classInfo[m.class_name]?.color || '#333', color: m.class_name === 'Long Ngâm' ? '#000' : '#fff' }} onClick={() => startAssignMember(m)}>
                       {m.char_name} {!m.class_name && '❓'}
                     </div>
                   ))}
-                {unassignedMembers.filter((m) => m.char_name.toLowerCase().includes(searchUnassigned.toLowerCase())).length === 0 && (
-                  <div style={{ gridColumn: 'span 3', color: '#555', fontSize: '11px', padding: '15px 0' }}>
-                    Không tìm thấy thành viên trống...
-                  </div>
+                {unassignedMembers.filter(m => m.char_name.toLowerCase().includes(searchUnassigned.toLowerCase())).length === 0 && (
+                  <div style={{ gridColumn: 'span 3', color: '#555', fontSize: '11px', padding: '15px 0' }}>Không tìm thấy thành viên trống...</div>
                 )}
               </div>
             </div>
@@ -737,15 +763,8 @@ function App() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 <div>
                   <label style={{ fontSize: '11px', color: '#aaa', display: 'block', marginBottom: '4px' }}>Chọn hệ phái chính thức:</label>
-                  <select
-                    className="custom-input"
-                    style={{ fontSize: '12px', padding: '6px', width: '100%' }}
-                    value={selectedClassForAssign}
-                    onChange={(e) => setSelectedClassForAssign(e.target.value)}
-                  >
-                    {Object.keys(classInfo).map((cls) => (
-                      <option key={cls} value={cls}>{cls}</option>
-                    ))}
+                  <select className="custom-input" style={{ fontSize: '12px', padding: '6px', width: '100%' }} value={selectedClassForAssign} onChange={(e) => setSelectedClassForAssign(e.target.value)}>
+                    {Object.keys(classInfo).map(cls => <option key={cls} value={cls}>{cls}</option>)}
                   </select>
                 </div>
                 <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
@@ -762,10 +781,8 @@ function App() {
 
           {!pendingAssignMember && (
             <div style={{ borderTop: '1px solid #222', paddingTop: '10px', marginBottom: '12px', textAlign: 'left' }}>
-              <div style={{ fontSize: '11px', color: 'gold', marginBottom: '5px', fontWeight: 'bold' }}>
-                PASTE DANH SÁCH TÊN HÀNG LOẠT VÀO KHO CHỜ:
-              </div>
-              <textarea
+              <div style={{ fontSize: '11px', color: 'gold', marginBottom: '5px', fontWeight: 'bold' }}>PASTE DANH SÁCH TÊN HÀNG LOẠT VÀO KHO CHỜ:</div>
+              <textarea 
                 style={{ width: '100%', height: '65px', background: '#000', border: '1px solid #444', borderRadius: '4px', color: '#fff', padding: '5px', fontSize: '11px', resize: 'none', fontFamily: 'monospace' }}
                 placeholder="Dán danh sách chỉ chứa Tên vào đây... (Ngăn cách bằng dấu phẩy hoặc Xuống dòng)"
                 value={bulkText}
@@ -779,42 +796,28 @@ function App() {
 
           {!pendingAssignMember && (
             <form onSubmit={handleCreateAndAssign} style={{ borderTop: '1px solid #222', paddingTop: '10px', textAlign: 'left' }}>
-              <div style={{ fontSize: '11px', color: '#888', marginBottom: '5px', fontWeight: 'bold' }}>
-                HOẶC TẠO MỚI 1 NGƯỜI TRỰC TIẾP VÀO Ô:
-              </div>
+              <div style={{ fontSize: '11px', color: '#888', marginBottom: '5px', fontWeight: 'bold' }}>HOẶC TẠO MỚI 1 NGƯỜI TRỰC TIẾP VÀO Ô:</div>
               <div style={{ display: 'flex', gap: '6px' }}>
                 <input className="custom-input" style={{ fontSize: '11px', padding: '5px' }} required placeholder="Nhập tên..." value={newCharName} onChange={(e) => setNewCharName(e.target.value)} />
                 <select className="custom-input" style={{ maxWidth: '110px', cursor: 'pointer', fontSize: '11px' }} value={newClassName} onChange={(e) => setNewClassName(e.target.value)}>
-                  {Object.keys(classInfo).map((cls) => (
-                    <option key={cls} value={cls}>{cls}</option>
-                  ))}
+                  {Object.keys(classInfo).map(cls => <option key={cls} value={cls}>{cls}</option>)}
                 </select>
                 <button type="submit" className="add-btn" style={{ fontSize: '11px', padding: '5px 12px' }}>THÊM MỚI</button>
               </div>
             </form>
           )}
 
-          <button
-            type="button"
-            onClick={() => { setAssigningSlot(null); setPendingAssignMember(null); }}
-            style={{ background: '#333', color: 'white', border: 'none', padding: '8px', borderRadius: '6px', fontWeight: 'bold', marginTop: '12px', width: '100%', cursor: 'pointer', fontSize: '12px' }}
-          >
-            ĐÓNG GIAO DIỆN
-          </button>
+          <button type="button" onClick={() => { setAssigningSlot(null); setPendingAssignMember(null); }} style={{ background: '#333', color: 'white', border: 'none', padding: '8px', borderRadius: '6px', fontWeight: 'bold', marginTop: '12px', width: '100%', cursor: 'pointer', fontSize: '12px' }}>ĐÓNG GIAO DIỆN</button>
         </div>
       )}
 
       {/* MODAL ĐIỀU CHỈNH HOẶC XEM PROFILE THÀNH VIÊN */}
       {selectedMember && (
-        <div className="modal-bottom">
-          <div style={{ marginBottom: '5px', fontWeight: 'bold', color: classInfo[selectedMember.class_name]?.color || '#fff', fontSize: '18px' }}>
-            {selectedMember.char_name}
-          </div>
-          <div style={{ fontSize: '11px', color: '#888', marginBottom: '15px' }}>
-            Hệ: {selectedMember.class_name || 'Chưa chọn'} | {selectedMember.type}
-          </div>
+        <div style={{ position: 'fixed', bottom: '20px', left: '50%', transform: 'translateX(-50%)', background: '#1a1a1a', padding: '20px', borderRadius: '15px', border: '2px solid gold', zIndex: 1000, width: '90%', maxWidth: '420px', boxShadow: '0 0 30px rgba(0,0,0,1)' }}>
+          <div style={{ marginBottom: '5px', fontWeight: 'bold', color: classInfo[selectedMember.class_name]?.color || '#fff', fontSize: '18px' }}>{selectedMember.char_name}</div>
+          <div style={{ fontSize: '11px', color: '#888', marginBottom: '15px' }}>Hệ: {selectedMember.class_name || 'Chưa chọn'} | {selectedMember.type}</div>
 
-          {/* KHO SKILL CHUNG (ADMIN) */}
+          {/* KHO SKILL CHUNG (Chỉ dành cho Admin) */}
           {isAdmin && (
             <div style={{ marginBottom: '15px', background: '#222', padding: '10px', borderRadius: '8px' }}>
               <div style={{ fontSize: '10px', color: 'gold', marginBottom: '8px' }}>KHO SKILL CHUNG (ADMIN)</div>
@@ -825,7 +828,7 @@ function App() {
                     <div className="lib-remove-btn" onClick={(e) => { e.stopPropagation(); removeFromLibrary(item.id); }}>×</div>
                   </div>
                 ))}
-                {skillLibrary.length === 0 && <div style={{ fontSize: '10px', color: '#555' }}>Kho trống...</div>}
+                {skillLibrary.length === 0 && <div style={{fontSize: '10px', color: '#555'}}>Kho trống...</div>}
               </div>
 
               <div style={{ marginTop: '10px', borderTop: '1px solid #333', paddingTop: '10px' }}>
@@ -845,10 +848,10 @@ function App() {
           <div style={{ marginBottom: '15px' }}>
             <div style={{ fontSize: '11px', color: 'gold', marginBottom: '8px', fontWeight: 'bold' }}>BỘ KỸ NĂNG ĐÃ TRANG BỊ</div>
             <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', background: 'rgba(0,0,0,0.4)', padding: '10px', borderRadius: '8px' }}>
-              {[0, 1, 2, 3, 4].map((i) => {
-                const skill = memberSkills.find((s) => s.member_id === selectedMember.id && parseInt(s.pos_x) === i);
+              {[0, 1, 2, 3, 4].map(i => {
+                const skill = memberSkills.find(s => s.member_id === selectedMember.id && parseInt(s.pos_x) === i);
                 return (
-                  <div key={i} className="skill-box">
+                  <div key={i} className="skill-box" style={{ width: '55px', height: '55px' }}>
                     {skill ? (
                       <>
                         <img src={skill.skill_url} style={{ width: '100%', height: '100%', borderRadius: '6px' }} alt="equipped" />
@@ -856,9 +859,7 @@ function App() {
                           <div onClick={() => removeSkillFromMember(skill.id)} style={{ position: 'absolute', top: '-5px', right: '-5px', background: 'red', color: 'white', width: '18px', height: '18px', borderRadius: '50%', fontSize: '11px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', border: '1px solid white' }}>×</div>
                         )}
                       </>
-                    ) : (
-                      'Trống'
-                    )}
+                    ) : 'Trống'}
                   </div>
                 );
               })}
@@ -872,33 +873,30 @@ function App() {
             <div>Vật tư: {selectedMember.has_item ? '📦 Có' : '❌ Không'}</div>
           </div>
 
-          {/* BẢNG ĐIỀU CHỈNH ADMIN */}
+          {/* CÁC NÚT ĐIỀU CHỈNH TRẠNG THÁI (Chỉ Admin mới có) */}
           {isAdmin && (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', marginBottom: '10px' }}>
               <button type="button" onClick={toggleScout} style={{ background: selectedMember.is_scout ? '#00ffff' : '#333', color: selectedMember.is_scout ? '#000' : '#fff', border: 'none', padding: '8px', borderRadius: '6px', fontWeight: 'bold', fontSize: '11px' }}>
-                {selectedMember.is_scout ? 'BỎ SCOUT 🔎' : 'SCOUT 🔎'}
+                {selectedMember.is_scout ? "BỎ SCOUT 🔎" : "SCOUT 🔎"}
               </button>
               <button type="button" onClick={toggleTowerTeam} style={{ background: selectedMember.is_tower_team ? '#ff4500' : '#fff', color: selectedMember.is_tower_team ? '#fff' : '#000', border: 'none', padding: '8px', borderRadius: '6px', fontWeight: 'bold', fontSize: '11px' }}>
-                {selectedMember.is_tower_team ? 'BỎ TEAM TRỤ 🔨' : 'TEAM TRỤ 🔨'}
+                {selectedMember.is_tower_team ? "BỎ TEAM TRỤ 🔨" : "TEAM TRỤ 🔨"}
               </button>
             </div>
           )}
 
-          {/* HÀNG NÚT ĐÓNG / THAO TÁC */}
+          {/* HÀNG NÚT ĐÓNG / THAO TÁC HỆ THỐNG */}
           <div style={{ display: 'flex', gap: '10px' }}>
             {isAdmin && (
               <>
                 <button type="button" onClick={toggleItem} style={{ flex: 1, background: selectedMember.has_item ? '#444' : '#28a745', color: 'white', border: 'none', padding: '10px', borderRadius: '6px', fontWeight: 'bold' }}>
-                  {selectedMember.has_item ? 'BỎ VẬT TƯ' : 'VẬT TƯ 📦'}
+                    {selectedMember.has_item ? "BỎ VẬT TƯ" : "VẬT TƯ 📦"}
                 </button>
-                <button type="button" onClick={deleteMember} style={{ background: '#dc3545', color: 'white', border: 'none', padding: '10px', borderRadius: '6px', fontWeight: 'bold', fontSize: '12px' }}>
-                  XÓA KHỎI Ô
-                </button>
+                {/* MOD ĐÃ ĐỔI: Tên nút chuyển từ "XÓA HẲN" sang "XÓA KHỎI Ô", khi bấm sẽ đưa member về list chờ chứ không xóa dữ liệu */}
+                <button type="button" onClick={deleteMember} style={{ background: '#dc3545', color: 'white', border: 'none', padding: '10px', borderRadius: '6px', fontWeight: 'bold', fontSize: '12px' }}>XÓA KHỎI Ô</button>
               </>
             )}
-            <button type="button" onClick={() => setSelectedMember(null)} style={{ flex: !isAdmin ? 1 : 'none', background: '#333', color: 'white', border: 'none', padding: '10px', borderRadius: '6px', fontWeight: 'bold', minWidth: '80px' }}>
-              ĐÓNG
-            </button>
+            <button type="button" onClick={() => setSelectedMember(null)} style={{ flex: !isAdmin ? 1 : 'none', background: '#333', color: 'white', border: 'none', padding: '10px', borderRadius: '6px', fontWeight: 'bold', minWidth: '80px' }}>ĐÓNG</button>
           </div>
         </div>
       )}
