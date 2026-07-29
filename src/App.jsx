@@ -442,24 +442,6 @@ function App() {
     }
   };
 
-  // HÀM ĐÃ SỬA LOGIC TRỪ SĨ SỐ THUẦN
-  const getGroupPureCount = (groupName) => {
-    const activeTeamIds = Object.keys(teamGroups).filter(teamId => teamGroups[teamId] === groupName).map(Number);
-    if (activeTeamIds.length === 0) return 0;
-
-    let totalPure = 0;
-    activeTeamIds.forEach(teamId => {
-      const teamMems = members.filter(m => m.type === 'Chính thức' && m.team_slot >= (teamId - 1) * 6 + 1 && m.team_slot <= teamId * 6);
-      const pureMems = teamMems.filter(m => m.char_name && !m.has_item && !m.is_scout && !m.is_tower_team);
-      totalPure += pureMems.length;
-    });
-
-    // Lọc các team 6 người được tách ra thuộc về Đoàn này
-    const partyCount = teamPositions.filter(p => p.marker_type === 'party' && p.group_name === groupName).length;
-    const remaining = totalPure - (partyCount * 6);
-
-    return remaining >= 0 ? remaining : 0;
-  };
 
   const totalItemsCount = members.filter(m => m.char_name && m.has_item).length;
   const totalScoutsCount = members.filter(m => m.char_name && m.is_scout).length;
