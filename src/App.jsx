@@ -414,6 +414,7 @@ function App() {
     }
   };
 
+  // HÀM ĐÃ SỬA LOGIC TRỪ SĨ SỐ THUẦN
   const getGroupPureCount = (groupName) => {
     const activeTeamIds = Object.keys(teamGroups).filter(teamId => teamGroups[teamId] === groupName).map(Number);
     if (activeTeamIds.length === 0) return 0;
@@ -425,6 +426,7 @@ function App() {
       totalPure += pureMems.length;
     });
 
+    // Lọc các team 6 người được tách ra thuộc về Đoàn này
     const partyCount = teamPositions.filter(p => p.marker_type === 'party' && p.group_name === groupName).length;
     const remaining = totalPure - (partyCount * 6);
 
@@ -713,28 +715,86 @@ function App() {
   <div className="map-container" ref={mapRef}>
     <img src="https://i.postimg.cc/SsMMSZLG/unnam2ed.jpg" alt="Tactical Map" className="map-bg" />
     
-    {teamPositions.map((pos) => {
-      let bg = '#fff';
-      let label = '';
+   {teamPositions.map((pos) => {
+  let bg = '#fff';
+  let label = '';
+  
+  // 1. Nếu là Vòng tròn Đoàn (marker_type có thể là 'doan' hoặc bắt đầu bằng 'Đoàn')
+  if (pos.marker_type === 'doan' || pos.marker_type.startsWith('Đoàn')) {
+    // Lấy tên Đoàn chính xác từ group_name hoặc marker_type
+    const currentGroup = pos.group_name || pos.marker_type;
+    bg = groupSettings[currentGroup]?.border || '#3b82f6';
+    
+    // Gọi hàm lấy sĩ số thuần đã trừ các Team 6 tách ra
+    label = getGroupPureCount(currentGroup).toString();
+  } 
+  // 2. Nếu là Team 6 người (Party) tách ra từ Đoàn
+  else if (pos.marker_type === 'party') {
+    const parentGroup = pos.group_name || 'Đoàn 1';
+    // Lấy màu viền/mền theo Đoàn mẹ để dễ nhận biết team này thuộc Đoàn nào
+    bg = groupSettings[parentGroup]?.border || '#a855f7'; 
+    label = '6'; // Luôn hiển thị cố định là 6 người
+  } 
+  // 3. Các marker chức năng khác
+  else if (pos.marker_type === 'item') {
+    bg = '#ffd700';
+    label = '📦';
+  } else if (pos.marker_type === 'scout') {
+    bg = '#00ffff';
+    label = '🔎';
+  } else if (pos.marker_type === 'tower') {
+    bg = '#ff4500';
+    label = '🔨';
+  }
+
+  return (
+    <div 
+      key={pos.id} 
+      style={{
+        position: 'absolute',
+        left: `${pos.pos_x}%`,
+        top: `${pos.pos_y}%`,
+        backgroundColor: bg,
+        width: '45px',
+        height: '45px',
+        borderRadius: '50%',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontWeight: 'bold',
+        color: '#fff',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+        cursor: isAdmin ? 'move' : 'pointer'
+      }}
+    >
+      {label}
       
-      if (pos.marker_type.startsWith('Đoàn')) {
-        const currentGroup = pos.marker_type;
-        bg = groupSettings[currentGroup]?.border || '#fff';
-        label = getGroupPureCount(currentGroup).toString();
-      } else if (pos.marker_type === 'party') {
-        const parentGroup = pos.group_name || 'Đoàn 1';
-        bg = groupSettings[parentGroup]?.border || '#a855f7';
-        label = '6';
-      } else if (pos.marker_type === 'item') {
-        bg = '#ffd700';
-        label = '📦';
-      } else if (pos.marker_type === 'scout') {
-        bg = '#00ffff';
-        label = '🔎';
-      } else if (pos.marker_type === 'tower') {
-        bg = '#ff4500';
-        label = '🔨';
-      }
+      {/* Nút xóa marker dành cho Admin */}
+      {isAdmin && (
+        <span 
+          onClick={(e) => { e.stopPropagation(); removeMarker(pos.id); }}
+          style={{
+            position: 'absolute',
+            top: '-5px',
+            right: '-5px',
+            background: 'red',
+            color: 'white',
+            borderRadius: '50%',
+            width: '16px',
+            height: '16px',
+            fontSize: '10px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer'
+          }}
+        >
+          ✕
+        </span>
+      )}
+    </div>
+  );
+})}
 
       return (
         <div key={pos.id} draggable={isAdmin} onDragEnd={(e) => handleDragEnd(e, pos.id)} className="team-node"
